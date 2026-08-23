@@ -3,17 +3,18 @@
 Records manual-testing journeys — screenshots, clicks, API calls (full bodies
 via CDP), console errors, rrweb DOM stream, quick notes — into vitrinka as a
 live session that projects onto a journey board with the tab-lanes timeline
-sidebar. Decisions: `docs/specs/2026-07-24-journey-recorder-decisions.md`.
+sidebar. What is captured and where it goes: `docs/PROTOCOL.md` at the repo
+root — the source in this folder is public precisely so you can verify it.
 
 ## Install (dev)
 
 1. `chrome://extensions` → Developer mode → **Load unpacked** → `apps/extension/`.
 2. Open the extension's **Settings** (or right-click the icon → Options): set
-   the vitrinka base URL (`https://vitrinka.ai` on the mesh, or a local
+   your vitrinka base URL (a hosted instance, or a local
    `http://127.0.0.1:8896`) and a token when the instance requires one.
 3. In vitrinka, give the project its domain rules
    (`PUT /api/v1/projects/{project}/settings`), e.g.
-   `{"domains":[{"pattern":"*.fixit.dev.lovinka.com","environment":"development"}]}` —
+   `{"domains":[{"pattern":"*.staging.example.com","environment":"development"}]}` —
    the popup shows which project/environment the current tab resolves to.
 
 Loading `apps/extension/` straight from the checkout is the dev flow; testers
@@ -53,7 +54,7 @@ manual banner — download, unzip over the folder, ↻.
 - The **corner HUD** shows rec · timer · a sync glyph · pause · ✎ note · ⌖
   annotate. Shortcuts: `Alt+Shift+S` annotate (click an element OR drag any
   region, note, Enter sends), `Alt+Shift+N` note, `Alt+Shift+P` pause.
-- **The glyph is the health answer** (recorder-live D4/D5): `✓` once the server
+- **The glyph is the health answer** (honest-health design): `✓` once the server
   confirms it holds everything captured, `⟳` while a backlog drains, `⚠` when
   vitrinka is unreachable, `⛔` when the session was closed or deleted
   server-side. Only trouble unfolds a second line; the popup carries the full
@@ -64,13 +65,13 @@ manual banner — download, unzip over the folder, ↻.
 - **Continue a journey**: the popup lists the project's recent finished
   sessions — Continue reopens one, the event stream resumes from its last
   sequence, and stop appends the new steps to the SAME set + board.
-- **The board is live** (D10): a recording session is projected as you work, so
+- **The board is live** (by design): a recording session is projected as you work, so
   it is there to open mid-test — screenshots wired by your clicks, notes and
   failed requests folded into shot meta, the timeline inspector (filters ·
   search · per-step network detail) on the left.
 - **Stop** closes the session, showing the real upload drain rather than a
   frozen button; closing the popup is safe, the worker finishes either way.
-  Reaching the board is a **separate act** (D3): the popup grows an
+  Reaching the board is a **separate act**: the popup grows an
   `⧉ Open board` row and a notification fires when the server has finished
   building it. Stopping never hijacks a tab.
 
@@ -86,19 +87,23 @@ manual banner — download, unzip over the folder, ↻.
 | console errors | CDP `Runtime` (page world, incl. uncaught exceptions) | |
 | notes / snaps | HUD | ⌖ = element pick OR region drag + note + forced screenshot → board annotation |
 
-Capture-everything is deliberate (D7): the tool targets mesh-only instances.
-Revisit redaction before any public/SaaS exposure.
+Capture-everything is a deliberate design decision: this is a testing tool
+for your own applications and environments, where full request/response
+bodies are exactly the evidence a journey board needs. The corollary is a
+rule, stated wherever the extension is documented: record only against
+environments you own. Redaction-before-capture is the planned hardening for
+any exposure beyond that trust boundary.
 
 ## Known limits
 
 - `chrome.debugger` shows Chrome's "is debugging this browser" banner while
-  recording (the D2 tradeoff) and cannot attach while DevTools is open on the
+  recording (a deliberate tradeoff: CDP is the only way to full network bodies) and cannot attach while DevTools is open on the
   same tab — recording continues without network capture.
 - The capture queue is **IndexedDB** (`db.js`) and the small hot state
   (config, session) is `chrome.storage.local` — SW restarts AND full browser
   restarts keep the undelivered tail, which drains on the next launch. Only
   requests mid-flight across a SW restart lose their response body.
-- **Nothing is ever dropped to make room** (D8): the queue grows for as long as
+- **Nothing is ever dropped to make room** (by design): the queue grows for as long as
   vitrinka is unreachable and the HUD turns loud instead. Space is reclaimed by
   reaping sessions the SERVER reports as done/deleted/gone — a live recording
   is never touched — and Settings shows per-session usage with a manual clear.
