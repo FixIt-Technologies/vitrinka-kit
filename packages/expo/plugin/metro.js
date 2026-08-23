@@ -1,0 +1,74 @@
+/**
+ * Metro half of the recorder's production strip — the ONE line a consuming
+ * app adds to metro.config.js (config plugins cannot modify metro config,
+ * so this cannot be automated away; the config plugin verifies it is wired):
+ *
+ *   const { withRecorderStrip } = require('@vitrinka/expo/recorder/metro');
+ *   module.exports = withRecorderStrip(config);
+ *
+ * WHY THE GATE ALONE IS NOT ENOUGH: the gate module folds to an early return
+ * on builds without recorder env, but Metro collects `require()` dependencies
+ * while TRANSFORMING a module — before any minifier can prove the branch dead.
+ * Measured by exporting the same tree both ways: without this hook, bundles
+ * contained the full recorder (api paths, captureRef, …) inert. Redirecting
+ * the gate's three specifiers to the empty stub — exactly on the builds where
+ * the gate can never reach them — is what actually excludes the subtree:
+ * provider, HUD, queue, api and the capture layers all drop out transitively.
+ */
+const path = require('path');
+
+const STRIPPED_SPECIFIERS = new Set([
+  './RecorderProvider',
+  './hud/RecorderPill',
+  './hud/AnnotateOverlay',
+]);
+
+/** Is this module inside @vitrinka/expo's recorder tree (source or build)? */
+function isRecorderOrigin(originModulePath) {
+  if (!originModulePath) return false;
+  return (
+    originModulePath.includes(path.join('@vitrinka', 'expo')) &&
+    originModulePath.includes('recorder')
+  );
+}
+
+/**
+ * @param {object} metroConfig the app's resolved Metro config
+ * @param {{requireOnProfiles?: string[]}} [opts] EAS build profiles that MUST
+ *   carry recorder env — profiles that exist only to produce a recorder build
+ *   (e.g. a prod-backed test lane whose token is injected per build). Without
+ *   this, such a profile built without its token silently takes the stub swap
+ *   and produces an artifact indistinguishable from a plain store build until
+ *   someone installs it and finds no HUD. This resolver is the process that
+ *   decides the swap, so it is the last point where the answer is knowable.
+ */
+function withRecorderStrip(metroConfig, opts = {}) {
+  const enabled = Boolean(
+    process.env.EXPO_PUBLIC_VITRINKA_URL && process.env.EXPO_PUBLIC_VITRINKA_TOKEN,
+  );
+
+  const profile = process.env.EAS_BUILD_PROFILE;
+  if (!enabled && profile && (opts.requireOnProfiles ?? []).includes(profile)) {
+    throw new Error(
+      `[@vitrinka/expo] Build refused — the "${profile}" profile requires the vitrinka ` +
+        'recorder env, and EXPO_PUBLIC_VITRINKA_TOKEN is not set. Inject it per build; ' +
+        'without it this profile silently produces a recorder-less binary, which is the ' +
+        'one thing it exists not to be.',
+    );
+  }
+
+  if (enabled) return metroConfig;
+
+  const stub = path.join(__dirname, '..', 'build', 'module', 'recorder', 'stub.js');
+  const upstreamResolveRequest = metroConfig.resolver.resolveRequest;
+  metroConfig.resolver.resolveRequest = (context, moduleName, platform) => {
+    if (STRIPPED_SPECIFIERS.has(moduleName) && isRecorderOrigin(context.originModulePath)) {
+      return { type: 'sourceFile', filePath: stub };
+    }
+    const next = upstreamResolveRequest ?? context.resolveRequest;
+    return next(context, moduleName, platform);
+  };
+  return metroConfig;
+}
+
+module.exports = { withRecorderStrip };

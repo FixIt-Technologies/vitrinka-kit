@@ -1,0 +1,73 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Vitrinka recorder — settings</title>
+<style>
+  * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { margin: 0; background: #141213; color: #f0eae4; }
+  .wrap { max-width: 460px; margin: 48px auto; padding: 0 20px; }
+  .kicker { display: flex; align-items: center; gap: 7px; font: 700 10.5px/1 ui-monospace, Menlo, monospace;
+    letter-spacing: .18em; text-transform: uppercase; color: #756e68; }
+  .kicker i { width: 3px; height: 10px; background: #ff3b57; }
+  h1 { margin: 10px 0 4px; font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
+  p { margin: 0 0 20px; font-size: 12px; color: #a8a099; line-height: 1.5; }
+  label { display: block; margin-top: 14px; font: 600 10px/1 ui-monospace, Menlo, monospace;
+    letter-spacing: .14em; text-transform: uppercase; color: #756e68; }
+  input { width: 100%; margin-top: 6px; padding: 9px 11px; background: #1d1a1b;
+    border: 1px solid #363132; border-radius: 8px; color: #f0eae4; font-size: 13px; }
+  button { margin-top: 18px; padding: 9px 18px; border: 0; border-radius: 8px; cursor: pointer;
+    background: #ff3b57; color: #fff; font-size: 13px; font-weight: 600; }
+  #status { margin-left: 12px; font: 500 11px/1 ui-monospace, Menlo, monospace; }
+  .ok { color: #53c07e; } .bad { color: #ff3b57; }
+  /* Recorder data (recorder-live D9): nothing is auto-deleted while it is
+     live, so the usage always has a visible home and a manual escape hatch. */
+  hr { margin: 34px 0 0; border: 0; border-top: 1px solid #292526; }
+  h2 { margin: 24px 0 4px; font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+  .rows { margin-top: 12px; border: 1px solid #292526; border-radius: 10px; overflow: hidden; }
+  .r { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 10px 12px; background: #1d1a1b; border-top: 1px solid #292526;
+    font: 500 11px/1.4 ui-monospace, Menlo, monospace; color: #a8a099; }
+  .r:first-child { border-top: 0; }
+  .r.total { background: #191617; color: #f0eae4; font-weight: 700; }
+  .r .live { color: #ff3b57; }
+  .btns { display: flex; align-items: center; gap: 10px; }
+  .btns button { margin-top: 14px; }
+  .ghost { background: transparent; border: 1px solid #363132; color: #a8a099; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker"><i></i>Vitrinka recorder</div>
+  <h1>Settings</h1>
+  <p>The recorder talks to your vitrinka instance over the mesh. The token is a
+     <code>vkp_</code> personal access token (or the instance write token);
+     project ↔ domain mapping lives in each vitrinka project's settings.
+     If the <code>vitrinka</code> CLI is set up on this machine these are filled
+     in for you — you only need this page to override them.</p>
+  <label for="base">Base URL</label>
+  <input id="base" placeholder="https://vitrinka.ai">
+  <label for="token">Token</label>
+  <input id="token" type="password" placeholder="vkp_…">
+  <div class="btns">
+    <button id="save">Save &amp; test</button>
+    <button class="ghost" id="fromCli">Fill from the vitrinka CLI</button>
+    <span id="status"></span>
+  </div>
+
+  <hr>
+  <h2>Recorder data</h2>
+  <p>Captured events and screenshots are held on disk until vitrinka has them —
+     an outage never discards a recording. Data belonging to a session vitrinka
+     has already finished is cleared automatically; a live recording is never
+     touched.</p>
+  <div class="rows" id="rows"></div>
+  <div class="btns">
+    <button id="reap">Clear finished sessions</button>
+    <button class="ghost" id="clear">Clear all</button>
+    <span id="dataStatus"></span>
+  </div>
+</div>
+<script src="options.js"></script>
+</body>
+</html>

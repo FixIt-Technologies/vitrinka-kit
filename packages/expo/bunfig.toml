@@ -1,0 +1,5 @@
+[test]
+# Preload mocks for native-only modules so `bun test` can run the pure-logic
+# suite. The preload runs BEFORE test files are imported, so `mock.module()`
+# calls beat ESM import hoisting.
+preload = ["./test/setup.ts"]

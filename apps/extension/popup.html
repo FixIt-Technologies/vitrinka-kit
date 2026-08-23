@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { width: 320px; margin: 0; background: #141213; color: #f0eae4; }
+  .wrap { padding: 14px; }
+  .kicker { display: flex; align-items: center; gap: 7px; font: 700 10.5px/1 ui-monospace, Menlo, monospace;
+    letter-spacing: .18em; text-transform: uppercase; color: #756e68; }
+  .kicker i { width: 3px; height: 10px; background: #ff3b57; }
+  .proj { margin-top: 10px; font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+  .sub { margin-top: 4px; font: 500 10px/1.5 ui-monospace, Menlo, monospace; color: #756e68; }
+  .env { padding: 1px 8px; border: 1px solid #363132; border-radius: 999px; color: #a8a099; }
+  input { width: 100%; margin-top: 10px; padding: 8px 10px; background: #1d1a1b;
+    border: 1px solid #363132; border-radius: 8px; color: #f0eae4; font-size: 12px; }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  button { flex: 1; padding: 8px 0; border: 0; border-radius: 8px; cursor: pointer;
+    font-size: 12px; font-weight: 600; }
+  .primary { background: #ff3b57; color: #fff; }
+  .ghost { background: transparent; border: 1px solid #363132; color: #a8a099; }
+  .ghost:hover, .primary:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .5; cursor: default; filter: none; }
+  .err { margin-top: 10px; font-size: 11px; color: #ff3b57; }
+  .update { display: block; width: 100%; margin-top: 10px; padding: 7px 10px; background: #1d1a1b;
+    border: 1px solid #363132; border-radius: 8px; text-decoration: none; text-align: left;
+    font: 600 10.5px/1.4 ui-monospace, Menlo, monospace; color: #a8a099; cursor: pointer; }
+  .update:hover:not(:disabled) { border-color: #ff3b57; color: #f0eae4; }
+  .update:disabled { opacity: .6; cursor: default; }
+  .foot { margin-top: 12px; padding-top: 10px; border-top: 1px solid #292526;
+    display: flex; justify-content: space-between; font: 500 10px/1 ui-monospace, Menlo, monospace; }
+  .foot a { color: #756e68; text-decoration: none; }
+  .foot a:hover { color: #a8a099; }
+  .footbtn { margin: 0; padding: 0; background: transparent; border: 0; cursor: pointer;
+    font: inherit; color: #756e68; }
+  .footbtn:hover:not(:disabled) { color: #a8a099; }
+  .footbtn:disabled { cursor: default; }
+  .hidden { display: none; }
+  .recent-label { margin: 14px 0 6px; font: 700 9.5px/1 ui-monospace, Menlo, monospace;
+    letter-spacing: .16em; text-transform: uppercase; color: #756e68; }
+  .recent-row { display: flex; width: 100%; justify-content: space-between; align-items: center;
+    gap: 8px; margin-top: 6px; padding: 8px 10px; background: #1d1a1b; text-align: left;
+    border: 1px solid #292526; border-radius: 8px; cursor: pointer; color: #a8a099; }
+  .recent-row:hover { border-color: #756e68; color: #f0eae4; }
+  .recent-title { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recent-meta { font: 500 9px/1 ui-monospace, Menlo, monospace; color: #756e68; flex: none; }
+
+  /* Health + drain detail (recorder-live D2/D4): the popup is the FULL detail
+     surface — the in-page HUD stays quiet and only unfolds on trouble. */
+  .panel { margin-top: 12px; padding: 10px; background: #1d1a1b;
+    border: 1px solid #292526; border-radius: 10px; }
+  .panel.bad { border-color: #ff3b57; }
+  .lane { display: grid; grid-template-columns: 44px 1fr 66px; align-items: center;
+    gap: 8px; margin-top: 7px; font: 500 9.5px/1 ui-monospace, Menlo, monospace; color: #756e68; }
+  .lane:first-child { margin-top: 0; }
+  .track { height: 4px; border-radius: 999px; background: #292526; overflow: hidden; }
+  .fill { display: block; height: 100%; width: 0%; background: #ff3b57; transition: width .24s ease; }
+  .lane .num { text-align: right; color: #a8a099; }
+  .stat { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px;
+    font: 500 9.5px/1.5 ui-monospace, Menlo, monospace; color: #756e68; }
+  .stat:first-child { margin-top: 0; }
+  .stat b { font-weight: 600; color: #a8a099; }
+  .note { margin-top: 8px; font: 500 9.5px/1.5 ui-monospace, Menlo, monospace; color: #756e68; }
+  .note.bad { color: #ff3b57; }
+  .boardbtn { display: block; width: 100%; margin-top: 8px; padding: 8px 0; text-align: center;
+    background: #ff3b57; color: #fff; border-radius: 8px; text-decoration: none;
+    font-size: 12px; font-weight: 600; }
+  .boardbtn:hover { filter: brightness(1.1); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker"><i></i><span id="state">Recorder</span></div>
+  <div class="proj" id="proj">…</div>
+  <div class="sub" id="sub"></div>
+  <input id="title" placeholder="session title (optional)">
+  <div class="row">
+    <button class="primary" id="start">● Start recording</button>
+  </div>
+  <div class="row hidden" id="recRow">
+    <button class="ghost" id="pause">⏸ Pause</button>
+    <button class="primary" id="stop">■ Stop</button>
+  </div>
+
+  <!-- Stop drain progress (D2): real per-lane numbers, never a bare spinner. -->
+  <div class="panel hidden" id="wrapPanel">
+    <div class="lane"><span>queue</span><span class="track"><i class="fill" id="fQueue"></i></span><span class="num" id="nQueue">—</span></div>
+    <div class="lane"><span>shots</span><span class="track"><i class="fill" id="fBlobs"></i></span><span class="num" id="nBlobs">—</span></div>
+    <div class="note" id="wrapNote">keep this open or close it — the upload continues either way</div>
+  </div>
+
+  <!-- Health detail (D4: the pill is a glyph, the full picture is here). -->
+  <div class="panel hidden" id="healthPanel">
+    <div class="stat"><span>queued</span><b id="hQueued">0</b></div>
+    <div class="stat"><span>on disk</span><b id="hBytes">0 B</b></div>
+    <div class="stat"><span>last sync</span><b id="hSync">—</b></div>
+    <div class="stat"><span>server has</span><b id="hSeq">—</b></div>
+    <div class="note hidden" id="hNote"></div>
+  </div>
+
+  <!-- Board readiness (D3): reaching the board is a separate, deliberate act. -->
+  <div class="panel hidden" id="boardPanel">
+    <div class="stat"><span id="boardState">Board building…</span><b id="boardMeta"></b></div>
+    <a class="boardbtn hidden" id="boardOpen" target="_blank" rel="noopener">⧉ Open board</a>
+  </div>
+
+  <div class="err hidden" id="err"></div>
+  <button class="update hidden" id="update"></button>
+  <div class="hidden" id="recent"></div>
+  <div class="foot">
+    <a href="#" id="options">settings</a>
+    <button class="footbtn" id="check" title="Check for a new recorder release"></button>
+    <span id="conn"></span>
+  </div>
+</div>
+<!-- module: popup.js imports the version compare it shares with the worker -->
+<script type="module" src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+{
+  "name": "@vitrinka/expo",
+  "version": "0.1.0",
+  "description": "vitrinka toolkit for Expo apps \u2014 the journey recorder: capture manual-testing sessions (screenshots, interactions, network, notes) straight into vitrinka boards.",
+  "license": "Elastic-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FixIt-Technologies/vitrinka-kit.git",
+    "directory": "packages/expo"
+  },
+  "source": "src/index.ts",
+  "main": "build/module/index.js",
+  "types": "build/typescript/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/typescript/src/index.d.ts",
+      "default": "./build/module/index.js"
+    },
+    "./recorder": {
+      "types": "./build/typescript/src/recorder/index.d.ts",
+      "default": "./build/module/recorder/index.js"
+    },
+    "./recorder/stub": "./build/module/recorder/stub.js",
+    "./recorder/storage": {
+      "types": "./build/typescript/src/recorder/storage/index.d.ts",
+      "default": "./build/module/recorder/storage/index.js"
+    },
+    "./recorder/expo-router": {
+      "types": "./build/typescript/src/recorder/expo-router.d.ts",
+      "default": "./build/module/recorder/expo-router.js"
+    },
+    "./recorder/metro": "./plugin/metro.js",
+    "./recorder/storage-mmkv": {
+      "types": "./build/typescript/src/recorder/storage-mmkv/index.d.ts",
+      "default": "./build/module/recorder/storage-mmkv/index.js"
+    },
+    "./protocol": {
+      "types": "./build/typescript/src/protocol/index.d.ts",
+      "default": "./build/module/protocol/index.js"
+    },
+    "./app.plugin.js": "./app.plugin.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "build",
+    "plugin",
+    "app.plugin.js",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "bob build",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src",
+    "prepublishOnly": "bob build"
+  },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "build",
+    "targets": [
+      [
+        "module",
+        {
+          "esm": true
+        }
+      ],
+      "typescript"
+    ]
+  },
+  "peerDependencies": {
+    "expo": ">=54",
+    "expo-constants": "*",
+    "expo-file-system": "*",
+    "expo-router": "*",
+    "react": "*",
+    "react-native": "*",
+    "react-native-keyboard-controller": ">=1.12",
+    "react-native-mmkv": ">=4",
+    "react-native-safe-area-context": ">=4",
+    "react-native-view-shot": ">=3"
+  },
+  "peerDependenciesMeta": {
+    "react-native-mmkv": {
+      "optional": true
+    },
+    "expo-router": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "19.2.14",
+    "expo": "^57.0.0",
+    "expo-constants": "~57.0.8",
+    "expo-file-system": "~57.0.1",
+    "expo-router": "~57.0.9",
+    "react": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-builder-bob": "^0.35.0",
+    "react-native-keyboard-controller": "1.21.9",
+    "react-native-mmkv": "4.3.1",
+    "react-native-safe-area-context": "5.7.0",
+    "react-native-view-shot": "5.1.0",
+    "typescript": "~6.0.3"
+  },
+  "keywords": [
+    "vitrinka",
+    "expo",
+    "react-native",
+    "recorder",
+    "testing",
+    "devtools",
+    "session-recording"
+  ]
+}

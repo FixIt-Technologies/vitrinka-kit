@@ -1,0 +1,25 @@
+# Dependencies & build output
+node_modules/
+build/
+dist/
+*.tgz
+coverage/
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Local env — never committed
+.env
+.env.*
+!.env.example
+
+# AI tooling — planning, memory, and agent config never enter this repo
+.claude/
+CLAUDE.md
+AGENTS.md
+.codex/
+.cursor/
+.cursorignore
