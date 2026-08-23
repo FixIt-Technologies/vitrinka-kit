@@ -31,6 +31,12 @@ build where the ingest token could leak into a store bundle:
 }
 ```
 
+If you publish OTA updates from scripts, also set `updateLaneVar` to the env
+var your update scripts export (e.g. `"updateLaneVar": "MYAPP_UPDATE_LANE"`) —
+it is the reliable signal for refusing a token on a store-facing channel;
+without it only best-effort argv scanning guards `eas update`. Prod-backed
+test lanes use `laneMarkerVar`/`laneMarkerValues` (see `plugin/build-guard.js`).
+
 **2. Metro strip** (`metro.config.js`) — one required line (config plugins
 cannot modify metro config; the plugin verifies it is present):
 

@@ -1,5 +1,5 @@
 /**
- * Network capture tests (reviews #3648832625, #3648832632, #3648832646):
+ * Network capture tests:
  * the capture gate (zero work when not recording), the HARD body bound in every
  * path — including length-less/chunked responses — and pass-through fidelity
  * (the app's own response must never be disturbed).
@@ -16,7 +16,7 @@ function recorded(): { kind: string; payload: Record<string, unknown> }[] {
 function liveSession(paused = false) {
   return {
     sessionId: 's1',
-    project: 'fixit',
+    project: 'example',
     environment: 'development',
     title: '',
     seq: 0,
@@ -31,7 +31,7 @@ function liveSession(paused = false) {
 // process-wide in bun test, and stubbing them here silently broke session.test.ts
 // in a full-suite run. This suite drives the REAL queue instead.
 mock.module('expo-constants', () => ({
-  default: { expoConfig: { ios: { bundleIdentifier: 'app.fixit.client.dev' }, version: '9.9.9' } },
+  default: { expoConfig: { ios: { bundleIdentifier: 'com.example.app.dev' }, version: '9.9.9' } },
 }));
 
 mock.module('expo-file-system/legacy', () => ({
@@ -118,7 +118,7 @@ type StubXHR = InstanceType<ReturnType<typeof makeStubXHR>>;
  * The PRISTINE fetch, captured once at module load — before any test patches it.
  * Capturing inside beforeEach saved an already-patched stub, and restoring only
  * on process `exit` left globalThis.fetch wrapped for every later suite in the
- * bun process (review #3648891209).
+ * bun process.
  */
 const pristineFetch = globalThis.fetch;
 let served: Response;
@@ -193,7 +193,7 @@ describe('body bound', () => {
 
   it('BOUNDS a length-less (chunked) response instead of buffering it whole', async () => {
     // Regression: with no content-length the old code did res.clone().text()
-    // with no bound at all (review #3648832625).
+    // with no bound at all.
     served = chunkedResponse(LIMIT * 3);
     await fetch('https://api.test/stream');
     await settled();
@@ -220,7 +220,7 @@ describe('body bound', () => {
   });
 });
 
-describe('stream chunk bound (reviews #3648891201, #3648929536)', () => {
+describe('stream chunk bound', () => {
   // Asserting on the RECORDED body is vacuous: redactAndCap(BODY_CAP) caps it to
   // 64 KiB no matter how much was read. These call the reader directly so the
   // bound on the READ itself is what's under test.
@@ -257,7 +257,7 @@ describe('stream chunk bound (reviews #3648891201, #3648929536)', () => {
     );
     const out = (await __readBoundedTextForTests(res, res.headers)) as string;
     // BOTH bounds: an implementation that read nothing, bailed after one chunk,
-    // or returned undefined would satisfy the upper bound alone (#3648964025).
+    // or returned undefined would satisfy the upper bound alone an earlier review.
     expect(out.length).toBeGreaterThanOrEqual(LIMIT);
     expect(out.length).toBeLessThan(LIMIT + 200);
     expect(out).toContain('truncated');
@@ -265,7 +265,7 @@ describe('stream chunk bound (reviews #3648891201, #3648929536)', () => {
 
   it('gives up on a stalled stream instead of parking forever', async () => {
     // Inject a short deadline: the real 3s burned wall clock and forced a 2x
-    // slack assertion wide enough to hide a regression (review #3648964029).
+    // slack assertion wide enough to hide a regression.
     const restore = __setBodyReadDeadlineForTests(120);
     try {
       const res = new Response(
@@ -290,7 +290,7 @@ describe('stream chunk bound (reviews #3648891201, #3648929536)', () => {
   it('does not strand a deadline timer per chunk', async () => {
     // COUNT the timers, do not time the run: 8000 pending-but-harmless timeouts
     // don't slow Bun measurably, so a wall-clock assertion passed with the leak
-    // present (reviews #3650004785, #3650004786). Each read-vs-deadline race
+    // present. Each read-vs-deadline race
     // creates one timer, and the fix clears it when the read wins.
     const realSetTimeout = globalThis.setTimeout;
     const realClearTimeout = globalThis.clearTimeout;
@@ -351,7 +351,7 @@ describe('stream chunk bound (reviews #3648891201, #3648929536)', () => {
   });
 });
 
-describe('session binding (review #3648891205)', () => {
+describe('session binding', () => {
   it('drops a request that completes after its session ended', async () => {
     served = new Response('{"a":1}', { status: 200, headers: { 'content-length': '7' } });
     const inFlight = fetch('https://api.test/slow');
@@ -372,7 +372,7 @@ describe('session binding (review #3648891205)', () => {
   });
 });
 
-describe('non-blocking record (review #3648891208)', () => {
+describe('non-blocking record', () => {
   it('resolves the caller‘s fetch WITHOUT waiting for the body read', async () => {
     let released: (() => void) | undefined;
     const gate = new Promise<void>((res) => {
@@ -422,7 +422,7 @@ describe('XHR capture', () => {
   it('does NOT read the body when capture stopped while the request was in flight', () => {
     // Regression: capturing() was only checked at send(), so a pause/stop
     // mid-flight still read + capped responseText for a discarded event
-    // (review #3648832632).
+    //.
     const XHRCls = (globalThis as unknown as { XMLHttpRequest: ReturnType<typeof makeStubXHR> })
       .XMLHttpRequest;
     const xhr = new XHRCls();

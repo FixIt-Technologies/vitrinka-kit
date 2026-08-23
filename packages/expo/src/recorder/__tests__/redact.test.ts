@@ -1,5 +1,5 @@
 /**
- * Credential redaction for captured payloads (reviews #3648514371, #3648514375).
+ * Credential redaction for captured payloads.
  *
  * D7 ("capture everything, trust the mesh") is about keeping FULL debugging
  * payloads — it is not a reason to ship auth tokens, passwords and OTPs into
@@ -70,7 +70,7 @@ describe('redactText', () => {
   });
 });
 
-describe('one policy for both paths (review #3648868611, #3648868619)', () => {
+describe('one policy for both paths', () => {
   // URLs and form bodies are never JSON, so they always take the text path.
   // Every key class the structural policy declares must mask there too.
   const cases: [string, string][] = [
@@ -104,7 +104,7 @@ describe('one policy for both paths (review #3648868611, #3648868619)', () => {
   });
 });
 
-describe('no over-redaction (review #3648868620, #3648868630)', () => {
+describe('no over-redaction', () => {
   // Substring matching used to destroy ordinary debugging data:
   // 'author'.includes('auth') and 'shipping'.includes('pin').
   it('keeps author-ish and pin-ish NON-secret fields intact', () => {
@@ -150,7 +150,7 @@ describe('no over-redaction (review #3648868620, #3648868630)', () => {
   });
 });
 
-describe('large JSON keeps the structural path (review #3648868615)', () => {
+describe('large JSON keeps the structural path', () => {
   it('masks a >64 KiB JSON body structurally rather than degrading to text', () => {
     const filler = 'd'.repeat(70 * 1024);
     const out = redactText(JSON.stringify({ note: filler, password: 'hunter2' })) as string;
@@ -167,7 +167,7 @@ describe('large JSON keeps the structural path (review #3648868615)', () => {
   });
 });
 
-describe('bounds (review #3648891211)', () => {
+describe('bounds', () => {
   it('replaces a body over the masking limit rather than leaving it raw', () => {
     // Non-JSON over MASK_TEXT_LIMIT (128 KiB): masking it would be too costly,
     // so it is omitted WITH its size — never passed through unmasked.
@@ -213,10 +213,10 @@ describe('redactAndCap ordering', () => {
   });
 });
 
-describe('no credential tail survives the regex (review #3648909229)', () => {
+describe('no credential tail survives the regex', () => {
   // Assert the POSITIVE shape, not just the absence of a long run: a negative
   // alone passes when up to 49 chars survive, or when the redactor mangles the
-  // input entirely (review #3648946378).
+  // input entirely.
   it('masks a token far longer than the old 4096-char bound', () => {
     const long = 'A'.repeat(5000);
     const out = redactText(`https://api.test/x?token=${long}&id=7`) as string;
@@ -242,7 +242,7 @@ describe('no credential tail survives the regex (review #3648909229)', () => {
   });
 });
 
-describe('no over-redaction of ordinary text (review #3648980385)', () => {
+describe('no over-redaction of ordinary text', () => {
   it('leaves a line that merely CONTAINS the word Digest intact', () => {
     const out = redactText('Digest mismatch for asset https://cdn.test/a.png (sha 9f2)') as string;
     expect(out).toBe('Digest mismatch for asset https://cdn.test/a.png (sha 9f2)');
@@ -257,7 +257,7 @@ describe('no over-redaction of ordinary text (review #3648980385)', () => {
   });
 
   it('redacts a BARE scheme credential that has no auth key in front of it', () => {
-    // A captured WWW-Authenticate body or a logged raw header (review #3650004778).
+    // A captured WWW-Authenticate body or a logged raw header.
     const out = redactText('Digest realm="api", nonce="abc123", opaque="xyz"') as string;
     expect(out).toBe('Digest [redacted]');
     expect(out).not.toContain('abc123');
@@ -279,7 +279,7 @@ describe('no over-redaction of ordinary text (review #3648980385)', () => {
   });
 });
 
-describe('secret headers mask their whole value (review #3648946370)', () => {
+describe('secret headers mask their whole value', () => {
   it('masks every cookie pair, not just the first', () => {
     const out = redactText('Cookie: sid=abc123; csrf=def456; theme=dark') as string;
     expect(out).toBe('Cookie: [redacted]');
@@ -302,9 +302,9 @@ describe('secret headers mask their whole value (review #3648946370)', () => {
   });
 });
 
-describe('safeDecode fallback (review #3648946372, #3648946368)', () => {
+describe('safeDecode fallback', () => {
   // Positive shapes, not bare negatives — a negative alone also passes when the
-  // redactor drops or mangles the whole value (review #3648980391).
+  // redactor drops or mangles the whole value.
   it('sees a secret whose value has a MALFORMED escape in the tail', () => {
     const out = redactText('https://api.test/x?next=token%3Dhunter2%ZZ') as string;
     expect(out).toBe('https://api.test/x?next=[redacted]');
@@ -317,7 +317,7 @@ describe('safeDecode fallback (review #3648946372, #3648946368)', () => {
 
   it('sees a secret delimiter even when the run also holds malformed UTF-8', () => {
     // `%3D` stayed encoded because the whole run failed to decode as UTF-8, so
-    // containsSecretPair never saw the `=` (review #3648980381).
+    // containsSecretPair never saw the `=`.
     const out = redactText('https://api.test/x?next=token%3Dhunter2%E0%80') as string;
     expect(out).not.toContain('hunter2');
     expect(out).toBe('https://api.test/x?next=[redacted]');
@@ -330,13 +330,13 @@ describe('safeDecode fallback (review #3648946372, #3648946368)', () => {
 
   it('leaves an ordinary malformed-escape value readable', () => {
     // Exact equality: `toContain('note=')` was satisfied by the redacted output
-    // too, so it proved nothing about over-redaction (review #3648980383).
+    // too, so it proved nothing about over-redaction.
     const out = redactText('https://api.test/x?note=100%25%ZZ') as string;
     expect(out).toBe('https://api.test/x?note=100%25%ZZ');
   });
 });
 
-describe('encoded query values (review #3648909233)', () => {
+describe('encoded query values', () => {
   it('redacts a secret nested inside an encoded value under an ordinary key', () => {
     const out = redactText('https://api.test/cb?next=%2Fcallback%3Ftoken%3Dsupersecret') as string;
     expect(out).not.toContain('supersecret');
@@ -355,7 +355,7 @@ describe('encoded query values (review #3648909233)', () => {
   });
 });
 
-describe('phrase matching across word boundaries (review #3648909237)', () => {
+describe('phrase matching across word boundaries', () => {
   it('does NOT mask unrelated words that merely contain a phrase when joined', () => {
     const p = JSON.parse(
       redactText(
@@ -398,7 +398,7 @@ describe('phrase matching across word boundaries (review #3648909237)', () => {
   });
 });
 
-describe('JSON structural bound (review #3648909231)', () => {
+describe('JSON structural bound', () => {
   it('does not parse a multi-megabyte JSON upload structurally', () => {
     const huge = JSON.stringify({ password: 'hunter2', blob: 'm'.repeat(2 * 1024 * 1024) });
     const started = Date.now();

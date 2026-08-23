@@ -1,5 +1,5 @@
 /**
- * Shared recorder state (review #3648909238): the subscription the HUD re-renders
+ * Shared recorder state: the subscription the HUD re-renders
  * off, and the route the capture layers stamp onto every event. Small surface,
  * but a leaked listener re-renders the HUD forever and a stale route mislabels
  * a whole session's timeline lane.
@@ -12,7 +12,7 @@ import { currentRoute, notify, subscribe } from '../state';
  * Snapshot at MODULE LOAD, before any beforeEach can assign to it. Asserting on
  * `currentRoute` after the suite's reset passed even if `state.ts`'s initializer
  * were changed to a stale route — the test verified the reset, not the default
- * (review #3648946375).
+ *.
  */
 const INITIAL_ROUTE = { ...currentRoute };
 

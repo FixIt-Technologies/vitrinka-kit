@@ -1,5 +1,5 @@
 /**
- * Session lifecycle tests (review #3648832638): the ordering guarantee that
+ * Session lifecycle tests: the ordering guarantee that
  * matters is `stopSession()` awaiting the in-flight keyframe BEFORE draining
  * and PATCHing done. Testing `shotSettled()` in isolation (as the first round
  * did) would still pass if that await were deleted — so these call the real
@@ -16,7 +16,7 @@ const script: { eventsError: number | null; tagsError: number | null } = {
 };
 
 mock.module('expo-constants', () => ({
-  default: { expoConfig: { ios: { bundleIdentifier: 'app.fixit.client.dev' }, version: '9.9.9' } },
+  default: { expoConfig: { ios: { bundleIdentifier: 'com.example.app.dev' }, version: '9.9.9' } },
 }));
 
 mock.module('expo-file-system/legacy', () => ({
@@ -48,14 +48,14 @@ const api = mock(async (_method: string, path: string, body?: unknown) => {
     const b = (body ?? {}) as { environment?: string; title?: string };
     return {
       id: 'sess-new',
-      project: 'fixit',
+      project: 'example',
       environment: b.environment || 'development',
       title: b.title ?? '',
     };
   } else if (typeof body === 'object' && body !== null && 'status' in body) {
     calls.push(`patch:${(body as { status: string }).status}`);
   }
-  return { boardSlug: 'fixit-session-1', board: { url: 'https://vitrinka.test/b/1' } };
+  return { boardSlug: 'example-session-1', board: { url: 'https://vitrinka.test/b/1' } };
 });
 
 // Real status vocabulary (native-import-free), so the mocked transport keeps
@@ -90,7 +90,7 @@ beforeEach(() => {
   queue.__resetForTests();
   queue.setState({
     sessionId: 'sess-1',
-    project: 'fixit',
+    project: 'example',
     environment: 'development',
     title: '',
     seq: 0,
@@ -182,7 +182,7 @@ describe('terminal verdict mid-drain', () => {
   it('a permanent rejection discovered MID-DRAIN still completes the stop in ONE press', async () => {
     // The permanent events rejection surfaces inside the drain that Stop
     // itself started — the stop must complete locally right there, not tell
-    // the tester to press Stop again (r3660602154).
+    // the tester to press Stop again.
     script.eventsError = 400;
     queue.pushEvent('click', {}, { tabId: 'home', tabHost: '/home' });
     await expect(session.stopSession()).rejects.toThrow(/ended locally/);

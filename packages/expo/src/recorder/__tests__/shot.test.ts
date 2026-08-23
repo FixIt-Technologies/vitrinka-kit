@@ -1,5 +1,5 @@
 /**
- * Keyframe capture session-binding (review #3648964023).
+ * Keyframe capture session-binding.
  *
  * Stop's wait for in-flight captures is deadline-bounded, so a slow keyframe CAN
  * outlive its session. `doShoot` snapshots the session before its awaits
@@ -67,7 +67,7 @@ const shot = (await import(
 function session(id: string) {
   return {
     sessionId: id,
-    project: 'fixit',
+    project: 'example',
     environment: 'development',
     title: '',
     seq: 0,
@@ -166,7 +166,7 @@ describe('held keyframes (annotate flow)', () => {
     expect(shots[0]?.ts).toBe('2026-07-27T10:00:00.001Z'); // ts-ordered right after the note
     expect(queue.getState()?.shots).toBe(1);
     // The blob is on the server — the temp JPEG must not outlive the commit
-    // (review r3657111106: the success path leaked one file per annotation).
+    // (review an earlier review: the success path leaked one file per annotation).
     expect(deleted).toContain('/tmp/shot.jpg');
   });
 

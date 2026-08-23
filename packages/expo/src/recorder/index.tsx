@@ -15,7 +15,7 @@
  * Metro collects `require()` dependencies while TRANSFORMING a module — before
  * any minifier can prove the surrounding branch dead — so the config plugin's
  * metro hook (`withRecorderStrip`) additionally redirects the entry modules to
- * `./stub` on builds without recorder env. Both layers together are the strip
+ * the plugin's shipped stub on builds without recorder env. Both layers together are the strip
  * guarantee; consuming apps should assert it against their own export pipeline
  * (see the package README).
  *
