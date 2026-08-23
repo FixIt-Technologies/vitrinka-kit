@@ -23,13 +23,19 @@ const STRIPPED_SPECIFIERS = new Set([
   './hud/AnnotateOverlay',
 ]);
 
-/** Is this module inside @vitrinka/expo's recorder tree (source or build)? */
+/**
+ * Is this module inside @vitrinka/expo's recorder tree? Matches BOTH layouts:
+ * the installed package (node_modules/@vitrinka/expo/build/module/recorder)
+ * and a workspace/source checkout (packages/expo/src/recorder) — Metro reports
+ * REAL paths through workspace symlinks, so an @vitrinka-only match would
+ * silently skip the strip for workspace-linked consumers.
+ */
 function isRecorderOrigin(originModulePath) {
   if (!originModulePath) return false;
-  return (
-    originModulePath.includes(path.join('@vitrinka', 'expo')) &&
-    originModulePath.includes('recorder')
-  );
+  const inPackage =
+    originModulePath.includes(path.join('@vitrinka', 'expo')) ||
+    originModulePath.includes(path.join('vitrinka-kit', 'packages', 'expo'));
+  return inPackage && originModulePath.includes('recorder');
 }
 
 /**
@@ -59,7 +65,10 @@ function withRecorderStrip(metroConfig, opts = {}) {
 
   if (enabled) return metroConfig;
 
-  const stub = path.join(__dirname, '..', 'build', 'module', 'recorder', 'stub.js');
+  // The stub lives HERE in plugin/ (plain CJS, no build step) so the redirect
+  // works identically for the installed package and a workspace/source
+  // checkout that has never run `bob build`.
+  const stub = path.join(__dirname, 'recorder-stub.js');
   const upstreamResolveRequest = metroConfig.resolver.resolveRequest;
   metroConfig.resolver.resolveRequest = (context, moduleName, platform) => {
     if (STRIPPED_SPECIFIERS.has(moduleName) && isRecorderOrigin(context.originModulePath)) {

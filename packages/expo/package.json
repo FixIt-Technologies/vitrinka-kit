@@ -20,7 +20,6 @@
       "types": "./build/typescript/src/recorder/index.d.ts",
       "default": "./build/module/recorder/index.js"
     },
-    "./recorder/stub": "./build/module/recorder/stub.js",
     "./recorder/storage": {
       "types": "./build/typescript/src/recorder/storage/index.d.ts",
       "default": "./build/module/recorder/storage/index.js"

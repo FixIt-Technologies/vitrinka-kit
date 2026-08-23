@@ -1,6 +1,6 @@
 /**
  * Source-level tests for the vitrinka recorder's durable queue + session
- * semantics (review #3648514393): single-flight flushing, permanent-vs-transient
+ * semantics: single-flight flushing, permanent-vs-transient
  * error classification, sequence gap-fill, pending eviction/session binding,
  * pause bookkeeping and the offline-Stop refusal.
  *
@@ -31,18 +31,15 @@ import {
 } from '../storage';
 
 let memStore: RecorderStorage = memoryRecorderStorage();
+// The preload (test/setup.ts) already configured a driver; reset its
+// first-use latch before installing the observable instance this file owns.
+__resetStorageForTests();
 configureRecorderStorage(memStore);
 
 function rawStorage(): RecorderStorage {
   return memStore;
 }
 
-/** Fresh store between suites (mirrors a reinstalled app). */
-function resetStorage(): void {
-  __resetStorageForTests();
-  memStore = memoryRecorderStorage();
-  configureRecorderStorage(memStore);
-}
 
 mock.module('expo-file-system/legacy', () => ({
   documentDirectory: '/docs/',
@@ -80,7 +77,7 @@ class TestApiError extends Error {
 
 // The REAL predicate — re-implementing it here would make the
 // "permanent vs transient" tests validate the test's own copy of the rule
-// rather than the shipped one (review #3648832640).
+// rather than the shipped one.
 const { permanentStatus: realPermanentStatus } = (await import(
   '../api-status'
 )) as typeof import('../api-status');
@@ -138,7 +135,7 @@ const ROUTE = { tabId: 'home', tabHost: '/home' };
 function liveSession(over: Partial<queue.SessionState> = {}): queue.SessionState {
   return {
     sessionId: 'sess-1',
-    project: 'fixit',
+    project: 'example',
     environment: 'development',
     title: '',
     seq: 0,
@@ -167,7 +164,7 @@ beforeEach(async () => {
 afterEach(() => {
   // Cancels the 2s flush + persist timers and clears caches, so a timer armed
   // by this test cannot fire inside the next one and eat its scripted
-  // transport outcomes (review #3648832631).
+  // transport outcomes.
   queue.__resetForTests();
 });
 
@@ -237,7 +234,7 @@ describe('flush', () => {
   });
 
   it('marks the SESSION dead on a PERMANENT verdict (extension D9) and stops POSTing', async () => {
-    // Supersedes the old per-batch drop (review #3648514377): a permanent
+    // Supersedes the old per-batch drop: a permanent
     // events rejection (revoked token, deleted session) is terminal for the
     // whole session — dropping just the batch would silently record into a
     // void. The buffer is KEPT for Stop to settle; no further POST happens.
@@ -294,7 +291,7 @@ describe('flush', () => {
 
   it('ships a pack-margin-busting but deliverable event ALONE instead of dropping it', async () => {
     // 3 MiB is the pack margin, 4 MiB the server wall — an event between the
-    // two is valid cargo and must ride solo, in order (r3660755423).
+    // two is valid cargo and must ride solo, in order.
     queue.pushEvent('click', { x: 1 }, ROUTE);
     queue.pushEvent('note', { text: '❄'.repeat(1200 * 1024) }, ROUTE); // ~3.5 MiB wire
     queue.pushEvent('click', { x: 2 }, ROUTE);
@@ -450,7 +447,7 @@ describe('capturesSettled', () => {
 
   it('reports FALSE on deadline instead of waiting forever', async () => {
     // A capture that never resolves — a long-lived stream body read. Stop must
-    // not hang on it (reviews #3648929532, #3648929535).
+    // not hang on it.
     void queue.trackCapture(new Promise<void>(() => undefined));
     const started = Date.now();
     const settled = await queue.capturesSettled(150);
@@ -491,8 +488,7 @@ describe('drainBuffer', () => {
 
 describe('debounced persistence (crash durability)', () => {
   // The buffer is an in-memory cache flushed to MMKV on a debounce. These pin
-  // the paths that must NOT depend on that timer (review #3648832627,
-  // #3648832635): the pre-upload write and the explicit persistNow().
+  // the paths that must NOT depend on that timer: the pre-upload write and the explicit persistNow().
   it('persists the batch to MMKV BEFORE the upload leaves', async () => {
     let onDiskDuringPost: string | undefined;
     transport.gate = Promise.resolve();
@@ -567,7 +563,7 @@ describe('reconcile (extension D5/D9 — only the server may declare a session d
   it('a successful reconcile restores healthy state after transient failures', async () => {
     // Two failed POSTs push the HUD offline; the next 200 from the reconcile
     // GET proves the server reachable again and must reset the failure count —
-    // with an empty upload queue nothing else ever would (r3660602144).
+    // with an empty upload queue nothing else ever would.
     queue.resetHealth();
     transport.events = [
       { ok: false, status: 503 },

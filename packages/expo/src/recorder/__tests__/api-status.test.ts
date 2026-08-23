@@ -1,5 +1,5 @@
 /**
- * Transport-status classification (review #3648891221). This is the predicate
+ * Transport-status classification. This is the predicate
  * both the event flush and the pending-shot drain branch on: a wrong verdict
  * either wedges the queue forever (transient treated as permanent's opposite)
  * or silently discards deliverable data.

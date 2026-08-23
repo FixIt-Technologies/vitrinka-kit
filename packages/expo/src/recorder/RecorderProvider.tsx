@@ -44,7 +44,7 @@ export interface RecorderRoute {
 /**
  * Expo's DevTools socket is backed by Metro and throws while resolving its
  * connection info in a Release bundle. Keep that bridge out of Release while
- * leaving the recorder itself available in testflight-dev builds.
+ * leaving the recorder itself available in TestFlight-style recorder builds.
  */
 function RecorderDevToolsControl() {
   useRecorderControl();

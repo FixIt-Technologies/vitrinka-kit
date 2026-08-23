@@ -11,6 +11,15 @@
  */
 import { mock } from 'bun:test';
 
+import { configureRecorderStorage, memoryRecorderStorage } from '../src/recorder/storage';
+
+// Durable storage for every suite: the in-memory driver, installed BEFORE any
+// test file imports the queue — so no file depends on another having
+// configured it, and the expo-file-system fallback (native, absent under bun)
+// is never reached. queue.test.ts swaps in its own instance (after a reset)
+// where it needs to observe the raw store.
+configureRecorderStorage(memoryRecorderStorage());
+
 mock.module('react-native', () => {
   const Stub = () => null;
   return {

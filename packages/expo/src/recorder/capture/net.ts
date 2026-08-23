@@ -1,7 +1,7 @@
 /**
  * Network capture — JS-level fetch + XHR monkey-patch (design decision).
  *
- * The app's @fixit/api-client rides axios, which uses XHR on RN — that patch
+ * A consuming app's API client may ride axios, which uses XHR on RN — that patch
  * carries the API waterfall. The fetch patch covers manual fetches. Bodies
  * are captured whole up to BODY_CAP (D7 capture-everything, mesh-only);
  * native-level requests (image loads, native SDKs) are out of scope.
