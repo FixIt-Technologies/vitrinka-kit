@@ -1,0 +1,42 @@
+name: Release @vitrinka/expo
+
+# A release is a tag, never a merge: `git tag expo-vX.Y.Z && git push origin expo-vX.Y.Z`.
+# The tag version must equal packages/expo/package.json's version.
+
+on:
+  push:
+    tags: ["expo-v*"]
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - name: Verify tag matches package version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#expo-v}"
+          PKG_VERSION="$(node -p "require('./packages/expo/package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag $TAG_VERSION != package.json $PKG_VERSION" >&2
+            exit 1
+          fi
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build
+      - name: Publish
+        working-directory: packages/expo
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
