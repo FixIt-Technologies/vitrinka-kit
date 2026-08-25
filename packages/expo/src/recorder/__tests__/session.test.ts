@@ -406,6 +406,41 @@ describe('redaction policy at session start', () => {
     }
   });
 
+  it('recovery REFETCHES a policy whose start-time fetch never settled (JS reload)', async () => {
+    // policy === undefined on the recovered session ⇒ the fetch promise died
+    // with the old runtime — without a refetch the session would run on the
+    // defaults forever and workspace extras/maskAllText would never apply.
+    policyScript = { maskAllText: true };
+    try {
+      const rec = queue.getState();
+      if (rec) queue.setState({ ...rec, policy: undefined });
+      redact.setRedactionPolicy(null);
+      session.recoverRedactionPolicy();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(redact.currentRules().maskAllText).toBe(true);
+      expect(queue.getState()?.policy).toEqual({ maskAllText: true });
+    } finally {
+      policyScript = null;
+      redact.setRedactionPolicy(null);
+    }
+  });
+
+  it('recovery does NOT refetch when the original fetch completed (null = failed ⇒ defaults)', async () => {
+    policyScript = { maskAllText: true }; // would flip the rules IF a refetch ran
+    try {
+      const rec = queue.getState();
+      if (rec) queue.setState({ ...rec, policy: null });
+      redact.setRedactionPolicy(null);
+      session.recoverRedactionPolicy();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(redact.currentRules().maskAllText).toBe(false);
+      expect(queue.getState()?.policy).toBeNull();
+    } finally {
+      policyScript = null;
+      redact.setRedactionPolicy(null);
+    }
+  });
+
   it('stopSession resets the active rules to the defaults', async () => {
     policyScript = { fullFidelity: true };
     try {

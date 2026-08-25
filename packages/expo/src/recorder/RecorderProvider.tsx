@@ -19,7 +19,6 @@ import { AppState, type GestureResponderEvent, View } from 'react-native';
 import { patchConsole } from './capture/console';
 import { patchNetwork } from './capture/net';
 import { pressLabel } from './capture/press';
-import { setRedactionPolicy } from './capture/redact';
 import { setShotRoot, shoot } from './capture/shot';
 import { useRecorderControl } from './control';
 import {
@@ -31,7 +30,7 @@ import {
   reconcile,
   scheduleFlush,
 } from './queue';
-import { armIdleStop } from './session';
+import { armIdleStop, recoverRedactionPolicy } from './session';
 import { currentRoute, setCurrentRoute } from './state';
 
 /** Where the recorder believes the user is; see the header for the mapping. */
@@ -71,11 +70,11 @@ export function RecorderProvider({
     // recording recovered from storage also needs its reconcile poll re-armed
     // (intervals do not survive a JS reload).
     scheduleFlush();
-    const recovered = getState();
-    if (recovered) {
+    if (getState()) {
       // A JS reload dropped the in-memory rule set — re-apply the session's
-      // policy (undefined/null = the safe defaults) before anything captures.
-      setRedactionPolicy(recovered.policy ?? null);
+      // policy before anything captures, and re-FETCH it if the start-time
+      // fetch never settled (its promise died with the old runtime).
+      recoverRedactionPolicy();
       armReconcile();
     }
     // A recovered recording also lost its idle timer. This recovery belongs

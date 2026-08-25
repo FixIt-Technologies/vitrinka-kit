@@ -71,6 +71,28 @@ function appId(): string {
   return bundled ?? 'unknown.app';
 }
 
+/**
+ * Re-apply a RECOVERED session's redaction policy after a JS reload — and
+ * re-FETCH it when the original fetch never settled: `policy === undefined`
+ * means the start-time promise died with the old runtime (null means the
+ * fetch completed and failed ⇒ defaults are the final answer). Without the
+ * refetch, a reload during the fetch would leave the whole session on the
+ * defaults — safe for the built-ins, but workspace extras and maskAllText
+ * (screenshot blur) would silently not apply.
+ */
+export function recoverRedactionPolicy(): void {
+  const rec = getState();
+  if (!rec) return;
+  setRedactionPolicy(rec.policy ?? null);
+  if (rec.policy !== undefined) return;
+  void fetchPolicy().then((policy) => {
+    const live = getState();
+    if (live?.sessionId !== rec.sessionId) return;
+    setRedactionPolicy(policy);
+    setState({ ...live, policy });
+  });
+}
+
 export function elapsedOf(rec: SessionState | null): number {
   if (!rec) return 0;
   let ms = rec.activeMs || 0;
