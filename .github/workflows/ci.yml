@@ -14,6 +14,9 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      # Build first: @vitrinka/expo consumes @vitrinka/redact through its
+      # build output (main/types point at build/), so typecheck and tests
+      # need the workspace built.
+      - run: bun run build
       - run: bun run typecheck
       - run: bun run test
-      - run: bun run build

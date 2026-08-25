@@ -120,6 +120,12 @@ export interface SessionState {
    * on the HUD's Stop and the server's 24h sweep.
    */
   idleStopMs?: number;
+  /**
+   * The workspace redaction policy fetched at session start (null = fetch
+   * failed ⇒ the engine's safe defaults). Durable WITH the session so a JS
+   * reload re-applies the same rules instead of silently reverting.
+   */
+  policy?: import('@vitrinka/redact').RedactionPolicy | null;
 }
 
 // The wire shape lives in ../protocol (the server pins its contract there);

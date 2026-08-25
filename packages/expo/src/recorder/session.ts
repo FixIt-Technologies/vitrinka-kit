@@ -14,10 +14,11 @@
  *   on a dead session completes locally instead of draining into a void.
  */
 import Constants from 'expo-constants';
-import { PixelRatio, Platform } from 'react-native';
+import { Platform } from 'react-native';
 
 import type { SessionDone } from '../protocol';
-import { api, permanentStatus, VitrinkaApiError } from './api';
+import { api, fetchPolicy, permanentStatus, VitrinkaApiError } from './api';
+import { setRedactionPolicy } from './capture/redact';
 import type { HeldShot } from './capture/shot';
 import {
   armReconcile,
@@ -70,6 +71,47 @@ function appId(): string {
   return bundled ?? 'unknown.app';
 }
 
+/**
+ * Re-apply a RECOVERED session's redaction policy after a JS reload — and
+ * re-FETCH it when the original fetch never settled: `policy === undefined`
+ * means the start-time promise died with the old runtime (null means the
+ * fetch completed and failed ⇒ defaults are the final answer). Without the
+ * refetch, a reload during the fetch would leave the whole session on the
+ * defaults — safe for the built-ins, but workspace extras and maskAllText
+ * (screenshot blur) would silently not apply.
+ */
+let policyRecoveryInFlight = false;
+
+export function recoverRedactionPolicy(): void {
+  const rec = getState();
+  if (!rec) return;
+  setRedactionPolicy(rec.policy ?? null);
+  if (rec.policy !== undefined) return;
+  // Single-flight: a double-invoked mount effect (React Strict Mode, provider
+  // remount) must not race two fetches whose LATER failure could overwrite an
+  // EARLIER success with null.
+  if (policyRecoveryInFlight) return;
+  policyRecoveryInFlight = true;
+  void fetchPolicy()
+    .then((policy) => {
+      const live = getState();
+      if (live?.sessionId !== rec.sessionId) return;
+      // Settled-policy guard, same reason as the single-flight: once ANY
+      // path recorded a final answer (fetched policy, or startSession's own
+      // apply), a late recovery response must not clobber it.
+      if (live.policy !== undefined) return;
+      setRedactionPolicy(policy);
+      setState({ ...live, policy });
+    })
+    .finally(() => {
+      // The reset lives in finally, NOT the then: fetchPolicy is contractually
+      // non-rejecting today, but that guarantee lives in another module — a
+      // future rejection must not leave the flag stuck true and recovery
+      // silently dead for the rest of the runtime.
+      policyRecoveryInFlight = false;
+    });
+}
+
 export function elapsedOf(rec: SessionState | null): number {
   if (!rec) return 0;
   let ms = rec.activeMs || 0;
@@ -101,6 +143,11 @@ export interface StartOptions {
 }
 
 export async function startSession(opts: StartOptions = {}): Promise<SessionState> {
+  // The safe defaults apply from the first captured byte; the workspace
+  // policy (fetched in parallel with the create — fetchPolicy never rejects)
+  // can only ADD rules or, self-host only, fullFidelity.
+  setRedactionPolicy(null);
+  const policyPromise = fetchPolicy();
   const ses = await api<{
     id: string;
     project: string;
@@ -118,6 +165,17 @@ export async function startSession(opts: StartOptions = {}): Promise<SessionStat
       appVersion: Constants.expoConfig?.version,
       ...(opts.driver ? { driver: opts.driver } : {}),
     },
+  });
+  // NEVER await the policy here (spec: capture starts under the safe defaults
+  // and the policy applies when it lands) — a stalled policy endpoint must not
+  // leave the session unstarted and the server row orphaned. The .then cannot
+  // fire before the setState below (no await separates them), and it applies
+  // only while THIS session is still current.
+  void policyPromise.then((policy) => {
+    const rec = getState();
+    if (rec?.sessionId !== ses.id) return;
+    setRedactionPolicy(policy);
+    setState({ ...rec, policy });
   });
   setState({
     sessionId: ses.id,
@@ -276,12 +334,16 @@ export function cornersToRect(ax: number, ay: number, bx: number, by: number): V
  * Emit a region annotation: the extension-shaped annotate-note
  * ({text, rect, annotate:true} — vitrinka's projection turns it into a real
  * board annotation region) followed by the frame frozen at drag-release.
- * The rect is scaled to the shot image's pixel space (captureRef captures at
- * screen density, so image px = view pt × PixelRatio). An empty note is still
- * a valid annotation, matching the extension.
+ * The rect is scaled to the shot image's pixel space using the held frame's
+ * OWN capture scale (screen density normally; the blur downscale under a
+ * maskAllText policy). An empty note is still a valid annotation, matching
+ * the extension.
  */
 export function addAnnotation(text: string, rect: ViewRect, held: HeldShot): void {
-  const s = PixelRatio.get();
+  // The HELD FRAME's own capture scale, not the screen density: a blurred
+  // keyframe (maskAllText) is only ~96px wide, and density-scaled rects would
+  // land far outside it.
+  const s = held.scale;
   const px = {
     x: Math.round(rect.x * s),
     y: Math.round(rect.y * s),
@@ -316,6 +378,7 @@ export async function stopSession(): Promise<SessionDone | null> {
   const completeDeadStop = async (reason: string | undefined): Promise<never> => {
     const kept = queuedCount();
     setState(null);
+    setRedactionPolicy(null);
     await resetQueues();
     notify();
     throw new Error(
@@ -372,6 +435,7 @@ export async function stopSession(): Promise<SessionDone | null> {
     }
   }
   setState(null);
+  setRedactionPolicy(null);
   await resetQueues();
   notify();
   return done;

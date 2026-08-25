@@ -49,6 +49,7 @@ const apiStatus = (await import(
 )) as typeof import('../api-status');
 
 mock.module('../api', () => ({
+  fetchPolicy: async () => null,
   api: async () => ({}),
   uploadShot: async () => ({ blobKey: 'b1' }),
   isVitrinkaUrl: (u: string) => u.startsWith('https://vitrinka.test'),
@@ -415,6 +416,70 @@ describe('redaction integration', () => {
     const url = String(recorded()[0].payload.url);
     expect(url).not.toContain('supersecret');
     expect(url).toContain('id=7');
+  });
+
+  it('form-encoded request bodies reach the engine WITH their content type', async () => {
+    // `y=1;password=…` defeats the generic text scanner (the benign pair's
+    // greedy value swallows the `;`-joined secret) — only the engine's form
+    // transform catches it, and that transform dispatches on the content type
+    // the bridge must forward.
+    served = new Response('ok', { status: 200, headers: { 'content-length': '2' } });
+    await fetch('https://api.test/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'y=1;password=FORM-SECRET',
+    });
+    await settled();
+    const req = String(recorded()[0].payload.reqBody);
+    expect(req).not.toContain('FORM-SECRET');
+    expect(req).toContain('y=1');
+  });
+
+  it('a `;`-separated query pair cannot smuggle a secret past the URL scrub', async () => {
+    served = new Response('ok', { status: 200, headers: { 'content-length': '2' } });
+    await fetch('https://api.test/cb?a=1;access_token=SEMI-SECRET');
+    await settled();
+    const url = String(recorded()[0].payload.url);
+    expect(url).not.toContain('SEMI-SECRET');
+    expect(url).toContain('a=1');
+  });
+});
+
+describe('header capture (redacted)', () => {
+  it('records fetch request/response headers with auth values scrubbed', async () => {
+    served = new Response('ok', {
+      status: 200,
+      headers: { 'content-length': '2', 'set-cookie': 'sid=SECRET-COOKIE', 'x-served-by': 'edge-1' },
+    });
+    await fetch('https://api.test/data', {
+      headers: { Authorization: 'Bearer SECRET-BEARER', Accept: 'application/json' },
+    });
+    await settled();
+    const p = recorded()[0].payload;
+    const req = p.reqHeaders as Record<string, string>;
+    const res = p.resHeaders as Record<string, string>;
+    expect(req.Authorization).toBe('[redacted]');
+    expect(req.Accept).toBe('application/json');
+    expect(JSON.stringify(p)).not.toContain('SECRET-BEARER');
+    expect(JSON.stringify(p)).not.toContain('SECRET-COOKIE');
+    expect(res['x-served-by']).toBe('edge-1');
+  });
+
+  it('records XHR request headers set via setRequestHeader, scrubbed', () => {
+    const XHRCls = (globalThis as unknown as { XMLHttpRequest: ReturnType<typeof makeStubXHR> })
+      .XMLHttpRequest;
+    const xhr = new XHRCls();
+    xhr.open('POST', 'https://api.test/login');
+    (xhr as unknown as XMLHttpRequest).setRequestHeader('X-Api-Key', 'SECRET-KEY');
+    (xhr as unknown as XMLHttpRequest).setRequestHeader('Content-Type', 'application/json');
+    xhr.responseText = '{"ok":true}';
+    xhr.send('{}');
+    xhr.fire('loadend');
+    const p = recorded()[0].payload;
+    const req = p.reqHeaders as Record<string, string>;
+    expect(req['X-Api-Key']).toBe('[redacted]');
+    expect(req['Content-Type']).toBe('application/json');
+    expect(JSON.stringify(p)).not.toContain('SECRET-KEY');
   });
 });
 

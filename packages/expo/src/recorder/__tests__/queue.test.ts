@@ -83,6 +83,7 @@ const { permanentStatus: realPermanentStatus } = (await import(
 )) as typeof import('../api-status');
 
 mock.module('../api', () => ({
+  fetchPolicy: async () => null,
   VitrinkaApiError: TestApiError,
   permanentStatus: realPermanentStatus,
   vitrinkaConfigured: () => true,
