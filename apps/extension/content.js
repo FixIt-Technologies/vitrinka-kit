@@ -35,9 +35,21 @@
     return parts.join(" > ");
   };
 
+  // Under a blur policy (maskAllText) keyframes are downscaled to 96px wide,
+  // so rects must land in THAT pixel space — device-pixel coordinates would
+  // sit far outside the image. Set from the vt-policy response; recomputed at
+  // use time so a window resize can't stale the factor.
+  let blurShots = false;
+  const imageScale = () => {
+    const s = window.devicePixelRatio || 1;
+    // CSS px → captured-image px: device scale normally; 96/viewport-width
+    // when keyframes are blurred to 96px wide.
+    if (!blurShots) return s;
+    return window.innerWidth > 0 ? 96 / window.innerWidth : s;
+  };
   const imageRect = (el) => {
     const r = el.getBoundingClientRect();
-    const s = window.devicePixelRatio || 1;
+    const s = imageScale();
     return { x: Math.round(r.x * s), y: Math.round(r.y * s), w: Math.round(r.width * s), h: Math.round(r.height * s) };
   };
 
@@ -73,10 +85,34 @@
       // to the 12 MiB wire cap; a single event beyond even that is
       // undeliverable — it is dropped AND surfaced as a ⚠ note on the
       // session timeline (replay may be incomplete from there).
-      rrRec({
-        emit: (ev) => rrBuf.push(ev),
-        inlineImages: true,
-        collectFonts: true,
+      //
+      // Redaction (SaaS data-security decision #2): ask the SW for the
+      // engine-computed mask directives first — maskAllInputs is the
+      // fail-closed DEFAULT (an unreachable SW still records with every
+      // input masked); the policy can only add maskAllText or, self-host
+      // only, fullFidelity. The directive mapping itself lives in the shared
+      // engine (maskDirectives via the SW's vt-policy response) so DOM
+      // semantics can never drift from it; this side only translates the
+      // directives into rrweb options. The one-message wait costs
+      // milliseconds before the full snapshot.
+      send({ type: "vt-policy" }).then((r) => {
+        try {
+          blurShots = (r && r.pixel) === "blur";
+          // Fail closed when the SW (or an older SW build) sent no directives.
+          const mask = (r && r.mask) || { maskAllInputs: true, maskAllText: false };
+          const opts = { emit: (ev) => rrBuf.push(ev), inlineImages: true, collectFonts: true };
+          if (mask.maskAllInputs) opts.maskAllInputs = true;
+          if (mask.maskAllText) {
+            opts.maskAllText = true;                                  // rrweb ≥2.x spelling
+            opts.maskTextSelector = mask.maskTextSelector || "*";     // alpha-era spelling
+          }
+          rrRec(opts);
+        } catch (e) { console.warn("vitrinka: rrweb failed to start", e); }
+      }).catch(() => {
+        // The message channel itself failed — start anyway, fully masked.
+        try {
+          rrRec({ emit: (ev) => rrBuf.push(ev), inlineImages: true, collectFonts: true, maskAllInputs: true });
+        } catch (e) { console.warn("vitrinka: rrweb failed to start", e); }
       });
     }
   } catch (e) { console.warn("vitrinka: rrweb failed to start", e); }
@@ -361,7 +397,10 @@
       const start = downAt;
       const wasDrag = dragging;
       downAt = null; dragging = false;
-      const s = window.devicePixelRatio || 1;
+      // Same CSS→image factor as element picks — under a blur policy the
+      // keyframe is 96px wide and a raw devicePixelRatio rect would land far
+      // outside it.
+      const s = imageScale();
       if (wasDrag) {
         const x = Math.min(start.x, e.clientX), y = Math.min(start.y, e.clientY);
         const w = Math.abs(e.clientX - start.x), h = Math.abs(e.clientY - start.y);
@@ -400,6 +439,10 @@
   // commands + stop from the SW
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === "vt-pick") startPick();
+    // A surviving content-script instance (re-injection no-ops) would keep a
+    // stale pixel policy across a stop→start with a changed workspace policy
+    // — the SW pushes the fresh value at session start.
+    else if (msg.type === "vt-policy-push") blurShots = msg.pixel === "blur";
     else if (msg.type === "vt-note-ui") { pendingPick = null; openPop("Note", null); }
     else if (msg.type === "vt-paused") setPaused(msg.paused, msg.elapsedMs);
     else if (msg.type === "vt-health") renderHealth(msg.health);

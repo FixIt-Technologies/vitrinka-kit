@@ -82,17 +82,22 @@ manual banner — download, unzip over the folder, ↻.
 | screenshots | `captureVisibleTab` on click/nav/snap, throttled | active tab only; background tabs catch up on tab-switch |
 | clicks | content script (capture phase) | selector, text, element rect in image px |
 | navigation | `webNavigation` (full + SPA history) | no page-world patching needed |
-| network | `chrome.debugger` CDP, XHR/fetch/document + worker/SW targets | req+resp bodies capped 64 KiB, headers capped 8 KiB/side; WS connections logged (frames NOT captured yet); degrades gracefully when DevTools holds the tab |
-| DOM stream | rrweb (vendored record bundle, `inlineImages` + `collectFonts` on) | uploaded as chunks; failed uploads retry from a disk-backed queue; watched via the board's session Watch mode (scrub replay); no-CORS cross-origin images can't inline and stay hotlinked |
+| network | `chrome.debugger` CDP, XHR/fetch/document + worker/SW targets | req+resp bodies capped 64 KiB and REDACTED before storage, headers capped 8 KiB/side with auth values scrubbed; WS connections logged (frames NOT captured yet); degrades gracefully when DevTools holds the tab |
+| DOM stream | rrweb (vendored record bundle, `inlineImages` + `collectFonts` on) | input values masked by default (`maskAllInputs`); uploaded as chunks; failed uploads retry from a disk-backed queue; watched via the board's session Watch mode (scrub replay); no-CORS cross-origin images can't inline and stay hotlinked |
 | console errors | CDP `Runtime` (page world, incl. uncaught exceptions) | |
 | notes / snaps | HUD | ⌖ = element pick OR region drag + note + forced screenshot → board annotation |
 
-Capture-everything is a deliberate design decision: this is a testing tool
-for your own applications and environments, where full request/response
-bodies are exactly the evidence a journey board needs. The corollary is a
-rule, stated wherever the extension is documented: record only against
-environments you own. Redaction-before-capture is the planned hardening for
-any exposure beyond that trust boundary.
+Capture is **redacted by default** via the shared
+[`@vitrinka/redact`](../../packages/redact) engine (`vendor/redact.js`, a
+generated copy CI keeps in sync): auth-bearing header values, sensitive
+JSON/form/multipart body keys, and URL query/fragment secrets are scrubbed
+before anything is buffered or sent, and rrweb records with input values
+masked. At session start the extension fetches your workspace's redaction
+policy (`GET /api/v1/recorder/policy`), which can add extra rules or
+`maskAllText`; if the fetch fails, the built-in defaults apply — never
+capture-everything. Self-hosted deployments can opt back into full-fidelity
+capture server-side. The vitrinka server re-applies the same redaction at
+ingest as a backstop. Even so: record only against environments you own.
 
 ## Known limits
 

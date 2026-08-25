@@ -64,10 +64,12 @@ conformance vectors in
   into parts, and a partial scan would leak exactly the fields the key scrub
   protects — the recorders fail closed instead.
 
-The Expo recorder applies this engine today; the browser extension's port
-ships in its next release (the vitrinka server additionally applies the same
-redaction at ingest for every client, so recordings from either client never
-store raw secrets).
+Both clients apply this engine — the Expo recorder imports it directly, the
+browser extension carries a generated copy (`vendor/redact.js`, kept in sync
+by a CI drift check) and additionally records the rrweb DOM stream with input
+values masked by default. The vitrinka server applies the same redaction at
+ingest for every client as the backstop, so recordings never store raw
+secrets either way.
 
 At session start the recorder fetches your workspace's redaction policy
 (`GET /api/v1/recorder/policy`), which can only ADD rules: extra header
@@ -77,8 +79,9 @@ the built-in defaults above apply — **never** capture-everything. A
 serve it otherwise) restores unredacted capture.
 
 Screenshots carry real rendered pixels and are not content-filtered by
-default. Under a `maskAllText` policy the Expo recorder captures keyframes at
-a strongly reduced resolution (text unreadable, layout visible). Otherwise:
+default. Under a `maskAllText` policy BOTH recorders capture keyframes at a
+strongly reduced resolution (text unreadable, layout visible; the extension
+drops a frame it cannot downscale rather than storing it raw). Otherwise:
 do not record against screens showing data you would not put on the
 session's board.
 
