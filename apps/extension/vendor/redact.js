@@ -469,7 +469,10 @@ function scrubMultipart(rules, body, contentType) {
         const value = seg.slice(hb + 4, -2);
         const nm = /content-disposition:[^\r\n]*;\s*name="([^"]*)"/i.exec(partHeaders);
         const name = nm?.[1] ?? '';
-        const scrubbed = name !== '' && sensitiveBodyKey(rules, name) ? REDACTED : maskPatterns(rules, value);
+        // Benign parts get the FULL text scanner, not patterns alone — a part
+        // value can be a header line (`Authorization: Bearer …`), a bare JWT, or
+        // an embedded JSON body carrying sensitive keys.
+        const scrubbed = name !== '' && sensitiveBodyKey(rules, name) ? REDACTED : maskText(rules, value);
         out.push(`\r\n${partHeaders}\r\n\r\n${scrubbed}\r\n`);
     }
     out.push(segs[segs.length - 1]);
@@ -502,7 +505,11 @@ export function redactBody(rules, body, contentType) {
         }
         const ct = (contentType ?? '').toLowerCase();
         if (ct.includes('x-www-form-urlencoded')) {
-            return maskPatterns(rules, scrubPairs(rules, sensitiveBodyKey, body));
+            // Key-wise scrub FIRST, then the full free-text scanner — the CT path
+            // must be a SUPERSET of the shapeless-text path, never a replacement:
+            // a benign-keyed value can carry a raw credential the key scrub cannot
+            // see (`client_assertion=eyJ…` — RFC 7523 / private_key_jwt).
+            return maskText(rules, scrubPairs(rules, sensitiveBodyKey, body));
         }
         if (ct.includes('multipart/form-data')) {
             const scrubbed = scrubMultipart(rules, body, contentType ?? '');
