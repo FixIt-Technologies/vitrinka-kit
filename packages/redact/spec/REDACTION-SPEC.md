@@ -95,13 +95,18 @@ Dispatch on shape and declared content type:
    rewrites `"<sensitive-key>": <value>` pairs, tolerating a missing closing
    quote; then patterns.
 3. **`application/x-www-form-urlencoded`**: split pairs on **both `&` and
-   `;`** and scrub key-wise. Never a platform query parser — `;` handling is
-   the known bypass class (see below).
+   `;`** and scrub key-wise, THEN run the free-text scan over the result.
+   Never a platform query parser — `;` handling is the known bypass class
+   (see below). The content-type path must be a SUPERSET of the shapeless
+   free-text path, never a replacement: a benign-keyed value can carry a raw
+   credential the key scrub cannot see (`client_assertion=eyJ…`).
 4. **`multipart/form-data`**: parse parts by the boundary; a part whose
    `Content-Disposition` form name is sensitive loses its value; other part
-   values (file parts included) pass the patterns; rebuild with the same
-   boundary. If the body won't parse (truncated, no boundary): pattern-only
-   fallback — never emit a half-scrubbed reconstruction.
+   values (file parts included) get the free-text scan (a part value can be a
+   header line, a bare JWT, or embedded JSON carrying sensitive keys);
+   rebuild with the same boundary. If the body won't parse (truncated, no
+   boundary): free-text fallback over the whole body — never emit a
+   half-scrubbed reconstruction.
 5. **Anything else**: free-text scanning (reference behavior, see below) and
    the extra patterns. At minimum the patterns must run.
 

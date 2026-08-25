@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tag-reachability guard needs history
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -24,6 +26,16 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
+      - name: Refuse tags not reachable from main
+        run: |
+          # A pushed tag can point at ANY commit; the version check alone would
+          # let an unreviewed branch publish with NPM_TOKEN in scope. Only
+          # commits that went through main's PR flow may publish.
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "Tag ${GITHUB_REF_NAME} points at a commit not reachable from main — refusing to publish" >&2
+            exit 1
+          fi
       - name: Verify tag matches package version
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#expo-v}"

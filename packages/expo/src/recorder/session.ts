@@ -71,6 +71,40 @@ function appId(): string {
   return bundled ?? 'unknown.app';
 }
 
+/**
+ * Re-apply a RECOVERED session's redaction policy after a JS reload — and
+ * re-FETCH it when the original fetch never settled: `policy === undefined`
+ * means the start-time promise died with the old runtime (null means the
+ * fetch completed and failed ⇒ defaults are the final answer). Without the
+ * refetch, a reload during the fetch would leave the whole session on the
+ * defaults — safe for the built-ins, but workspace extras and maskAllText
+ * (screenshot blur) would silently not apply.
+ */
+let policyRecoveryInFlight = false;
+
+export function recoverRedactionPolicy(): void {
+  const rec = getState();
+  if (!rec) return;
+  setRedactionPolicy(rec.policy ?? null);
+  if (rec.policy !== undefined) return;
+  // Single-flight: a double-invoked mount effect (React Strict Mode, provider
+  // remount) must not race two fetches whose LATER failure could overwrite an
+  // EARLIER success with null.
+  if (policyRecoveryInFlight) return;
+  policyRecoveryInFlight = true;
+  void fetchPolicy().then((policy) => {
+    policyRecoveryInFlight = false;
+    const live = getState();
+    if (live?.sessionId !== rec.sessionId) return;
+    // Settled-policy guard, same reason as the single-flight: once ANY path
+    // recorded a final answer (fetched policy, or startSession's own apply),
+    // a late recovery response must not clobber it.
+    if (live.policy !== undefined) return;
+    setRedactionPolicy(policy);
+    setState({ ...live, policy });
+  });
+}
+
 export function elapsedOf(rec: SessionState | null): number {
   if (!rec) return 0;
   let ms = rec.activeMs || 0;
