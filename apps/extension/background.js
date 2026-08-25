@@ -795,38 +795,46 @@ async function shoot(tabId, payload) {
   if (!payload || !payload.snap) {
     if (lastShotHash.get(String(tabId)) === hash) return;
   }
-  lastShotHash.set(String(tabId), hash);
-  // Re-validate across the capture awaits, then hold allocSeq to its answer:
-  // the early check avoids burning a seq in the common case, the comparison
-  // closes the window entirely.
-  if (!capturing(await getState())) return;
-  const alloc = await allocSeq();
-  if (!alloc || alloc.sessionId !== startedIn) return;
   // Native Blob into the queue — no base64 dataURL sitting on disk (D7).
-  // The encode below is an await, so the item is filed under the session the
-  // seq came from, never whatever is live once it finishes.
   let blob = await (await fetch(dataURL)).blob();
   // Pixel masking (maskAllText ⇒ blur): screenshots carry real rendered
   // text — downscale until text is unreadable while layout survives,
   // mirroring the Expo client's blurred keyframes. FAIL CLOSED: if the
-  // downscale fails, a masked workspace gets no frame rather than raw pixels.
+  // downscale fails, a masked workspace gets no frame rather than raw
+  // pixels. Runs BEFORE the dedup-hash write and the seq allocation, so a
+  // dropped frame neither burns a seq (a hole in the ordinal stream) nor
+  // poisons the dedup cache (the NEXT capture of this unchanged screen must
+  // still land).
   if (vtRedact.pixelPolicy(rulesOf(rec)) === "blur") {
+    let bmp;
     try {
-      const bmp = await createImageBitmap(blob);
+      bmp = await createImageBitmap(blob);
       const w = 96, h = Math.max(1, Math.round((bmp.height / bmp.width) * w));
       const cv = new OffscreenCanvas(w, h);
       cv.getContext("2d").drawImage(bmp, 0, 0, w, h);
       blob = await cv.convertToBlob({ type: "image/jpeg", quality: 0.7 });
-      bmp.close();
     } catch (e) {
       console.warn("vitrinka: shot blur failed — frame dropped (maskAllText)", String(e));
       return;
+    } finally {
+      if (bmp) bmp.close();
     }
   }
+  lastShotHash.set(String(tabId), hash);
+  // Re-validate across the capture awaits, then hold allocSeq to its answer:
+  // the early check avoids burning a seq in the common case, the comparison
+  // closes the window entirely. The encode above is an await, so the item is
+  // filed under the session the seq came from, never whatever is live once
+  // it finishes.
+  if (!capturing(await getState())) return;
+  const alloc = await allocSeq();
+  if (!alloc || alloc.sessionId !== startedIn) return;
   await enqueue({
     sessionId: alloc.sessionId, seq: alloc.seq,
     ts: new Date().toISOString(), tabId: tab.id, tabHost: tab.host,
-    kind: "shot", payload, blob, blobCT: "image/png",
+    // blobCT is the literal upload Content-Type — it must describe the BLOB
+    // (JPEG after the blur path), never assume the capture format.
+    kind: "shot", payload, blob, blobCT: blob.type || "image/png",
   });
 }
 
@@ -1292,6 +1300,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     const tab = sender.tab ? await tabInfo(sender.tab.id) : null;
     switch (msg.type) {
+      // NB: every case must end in sendResponse — a throw before it would
+      // leave the sender's promise unsettled until Chrome collects the port
+      // (the content script's rrweb start waits on exactly that), hence the
+      // catch at the bottom of this IIFE.
       case "vt-click":
         if (tab) {
           // The clicked element's label can BE the secret: for an <input>,
@@ -1300,7 +1312,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // rrweb masks the same pixels. Same engine pass the Expo client's
           // press labels get (press.ts → redactText).
           const rec = await getState();
-          const payload = { ...msg.payload, text: vtRedact.redactText(rulesOf(rec), msg.payload.text || "") };
+          const payload = { ...msg.payload, text: vtRedact.redactText(rulesOf(rec), (msg.payload && msg.payload.text) || "") };
           await pushEvents([{ tabId: tab.id, tabHost: tab.host, kind: "click", payload }]);
           await shoot(sender.tab.id, { route: msg.route, title: sender.tab.title, url: sender.tab.url });
         }
@@ -1414,7 +1426,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return sendResponse(await hostCall("config"));
     }
     sendResponse({ ok: false, error: "unknown message" });
-  })();
+  })().catch((e) => {
+    // A throw before sendResponse would otherwise leave the sender's promise
+    // unsettled for a nondeterministic interval (until Chrome collects the
+    // dropped port) — settle it with an error instead.
+    console.warn("vitrinka: message handler failed", msg && msg.type, e);
+    try { sendResponse({ ok: false, error: String(e) }); } catch { /* port gone */ }
+  });
   return true; // async sendResponse
 });
 
