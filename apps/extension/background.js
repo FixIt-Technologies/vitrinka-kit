@@ -665,7 +665,11 @@ async function fetchPolicy() {
     return res.policy || null;
   } catch (e) {
     const status = statusOf(e);
-    if (status >= 400 && status < 500) {
+    // permanentStatus = 4xx minus 408/429: a rate-limited or proxy-timed-out
+    // GET is TRANSIENT — settling it would reopen the fail-open this tri-state
+    // exists to close (401/403 stay permanent deliberately: a dead token kills
+    // the uploads through the same api(), so the session is dying regardless).
+    if (permanentStatus(status)) {
       console.warn("vitrinka: no redaction policy (HTTP " + status + ") — using safe defaults", e);
       return null;
     }
