@@ -397,7 +397,10 @@
       const start = downAt;
       const wasDrag = dragging;
       downAt = null; dragging = false;
-      const s = window.devicePixelRatio || 1;
+      // Same CSS→image factor as element picks — under a blur policy the
+      // keyframe is 96px wide and a raw devicePixelRatio rect would land far
+      // outside it.
+      const s = imageScale();
       if (wasDrag) {
         const x = Math.min(start.x, e.clientX), y = Math.min(start.y, e.clientY);
         const w = Math.abs(e.clientX - start.x), h = Math.abs(e.clientY - start.y);
@@ -436,6 +439,10 @@
   // commands + stop from the SW
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === "vt-pick") startPick();
+    // A surviving content-script instance (re-injection no-ops) would keep a
+    // stale pixel policy across a stop→start with a changed workspace policy
+    // — the SW pushes the fresh value at session start.
+    else if (msg.type === "vt-policy-push") blurShots = msg.pixel === "blur";
     else if (msg.type === "vt-note-ui") { pendingPick = null; openPop("Note", null); }
     else if (msg.type === "vt-paused") setPaused(msg.paused, msg.elapsedMs);
     else if (msg.type === "vt-health") renderHealth(msg.health);

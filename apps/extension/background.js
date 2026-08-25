@@ -867,6 +867,10 @@ async function startSession(title) {
   // once the server confirms, and flush drops it on sight either way.
   await reapDeadSessions().catch(() => {});
   await attachTab(active.id, active.url);
+  // A SURVIVING content-script instance (re-injection no-ops) keeps module
+  // state from the previous session — push the fresh pixel policy so blurred
+  // workspaces get correctly scaled rects without a navigation.
+  chrome.tabs.sendMessage(active.id, { type: "vt-policy-push", pixel: vtRedact.pixelPolicy(vtRedact.compileRules(policy || null)) }).catch(() => {});
   await shoot(active.id, { route: routeOf(active.url), title: active.title, url: active.url });
   await badge("rec");
   armReconcile();
@@ -895,6 +899,10 @@ async function continueSession(sessionId) {
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (active && /^https?:/.test(active.url || "")) {
     await attachTab(active.id, active.url);
+  // A SURVIVING content-script instance (re-injection no-ops) keeps module
+  // state from the previous session — push the fresh pixel policy so blurred
+  // workspaces get correctly scaled rects without a navigation.
+  chrome.tabs.sendMessage(active.id, { type: "vt-policy-push", pixel: vtRedact.pixelPolicy(vtRedact.compileRules(policy || null)) }).catch(() => {});
     await shoot(active.id, { route: routeOf(active.url), title: active.title, url: active.url });
   }
   await badge("rec");
