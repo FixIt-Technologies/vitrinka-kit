@@ -641,7 +641,16 @@ function capHeaders(h, rec) {
 // full fidelity, which only ever arrives as an explicit server-approved flag.
 async function fetchPolicy() {
   try {
-    return (await api("GET", "/api/v1/recorder/policy")).policy || null;
+    // BOUNDED: a hung endpoint must not pin pendingPolicy — and with it every
+    // vt-policy/shoot waiter — for the session's lifetime. A timeout counts
+    // as a completed-and-failed fetch (defaults become final), same contract
+    // as a network error.
+    const res = await Promise.race([
+      api("GET", "/api/v1/recorder/policy"),
+      new Promise((_res, rej) =>
+        setTimeout(() => rej(new Error("policy fetch timed out")), 10_000)),
+    ]);
+    return res.policy || null;
   } catch (e) {
     console.warn("vitrinka: redaction policy fetch failed — using safe defaults", e);
     return null;
