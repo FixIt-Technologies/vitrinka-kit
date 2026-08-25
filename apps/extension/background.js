@@ -646,23 +646,48 @@ async function fetchPolicy() {
 }
 
 // applyPolicyWhenFetched patches the fetched policy into rec once it lands —
-// only while the SAME session is live and no answer settled meanwhile — then
-// pushes the pixel policy to the attached tab (a surviving content-script
+// only while the SAME run is live and no answer settled meanwhile — then
+// pushes the pixel policy to every attached tab (a surviving content-script
 // instance keeps module state across sessions). Never blocks session start
-// (REDACTION-SPEC "Fail closed": defaults capture until the policy lands).
+// (REDACTION-SPEC "Fail closed": the KEY/URL defaults capture until the
+// policy lands; the DOM/pixel directives wait via awaitPolicySettled below,
+// because THEIR default is the permissive side).
 let policyRefetchInFlight = false;
+// The in-flight fetch, exposed so vt-policy/shoot can wait on it bounded.
+let pendingPolicy = null;
+// Monotonic run counter: a stale promise from run A must not outrace run B's
+// fresher answer even when both runs carry the SAME server session id
+// (stop → continue of one session).
+let policyRunSeq = 0;
 function applyPolicyWhenFetched(policyPromise, sessionId, tabId) {
+  const runSeq = ++policyRunSeq;
+  pendingPolicy = policyPromise;
   policyPromise.then(async (policy) => {
+    if (runSeq !== policyRunSeq) return; // a newer run superseded this fetch
     const rec = await getState();
     if (!rec || rec.sessionId !== sessionId || rec.policy !== undefined) return;
     await setState({ ...rec, policy });
-    if (tabId != null) {
-      chrome.tabs.sendMessage(tabId, {
-        type: "vt-policy-push",
-        pixel: vtRedact.pixelPolicy(vtRedact.compileRules(policy || null)),
-      }).catch(() => {});
+    // Push to the explicit tab AND every attached tab — the reconcile retry
+    // has no single "active" tab, and surviving instances all need the flip.
+    const pixel = vtRedact.pixelPolicy(vtRedact.compileRules(policy || null));
+    const ids = new Set(Object.keys(rec.tabs || {}).map(Number));
+    if (tabId != null) ids.add(tabId);
+    for (const id of ids) {
+      chrome.tabs.sendMessage(id, { type: "vt-policy-push", pixel }).catch(() => {});
     }
-  }).catch(() => {});
+  }).catch(() => {}).finally(() => {
+    if (pendingPolicy === policyPromise) pendingPolicy = null;
+  });
+}
+
+// Bounded wait for the in-flight policy. Returns the FRESH rec afterwards;
+// callers whose safe default is the PERMISSIVE side (rrweb text masking,
+// screenshot blur) must not act on an unsettled state.
+async function awaitPolicySettled(ms) {
+  if (pendingPolicy) {
+    await Promise.race([pendingPolicy, new Promise((res) => setTimeout(res, ms))]);
+  }
+  return getState();
 }
 
 chrome.debugger.onEvent.addListener(async (source, method, params) => {
@@ -801,8 +826,16 @@ function shotHash(s) {
 }
 
 async function shoot(tabId, payload) {
-  const rec = await getState();
+  let rec = await getState();
   if (!capturing(rec)) return;
+  // A frame captured before the policy settles could be a full-resolution
+  // shot of a workspace that demanded blur (maskAllText's default is the
+  // permissive side). Wait bounded; still unsettled ⇒ drop the frame — the
+  // same fail-closed spirit as the blur-failure drop below.
+  if (rec.policy === undefined) {
+    rec = await awaitPolicySettled(2000);
+    if (!capturing(rec) || rec.policy === undefined) return;
+  }
   const tab = rec.tabs[String(tabId)];
   if (!tab) return;
   // The tab URL can be an OAuth callback / magic link — same query-secret
@@ -1421,18 +1454,33 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return sendResponse({ rec, elapsedMs: elapsedOf(rec), health: await health() });
       }
       case "vt-policy": {
-        // The content script asks before starting rrweb: maskAllInputs is its
-        // fail-closed default, the policy only ADDS maskAllText or
-        // (self-host) fullFidelity. `mask` is the ENGINE's directive mapping
-        // (maskDirectives) so the DOM semantics can never drift from the
-        // shared implementation; the raw policy rides along for reference.
-        const rec = await getState();
+        // The content script asks before starting rrweb. The KEY/URL defaults
+        // fail closed, but the DOM/pixel directives' default is the
+        // PERMISSIVE side (maskAllText TIGHTENS) — answering from an
+        // unsettled state would start rrweb unmasked in a masked workspace,
+        // permanently (rrweb configures once). Wait bounded for the in-flight
+        // fetch; if still unsettled, answer STRICT (mask everything, blur):
+        // over-masking a normal workspace briefly beats un-masking a masked
+        // one for the whole session.
+        let rec = await getState();
+        if (rec && rec.policy === undefined) {
+          rec = await awaitPolicySettled(2000);
+        }
+        if (rec && rec.policy === undefined) {
+          return sendResponse({
+            ok: true, policy: null,
+            mask: { maskAllInputs: true, maskAllText: true, maskTextSelector: "*" },
+            pixel: "blur",
+          });
+        }
+        // `mask` is the ENGINE's directive mapping (maskDirectives) so the
+        // DOM semantics can never drift from the shared implementation;
+        // 'blur' ⇒ keyframes are 96px wide — the content script scales its
+        // click/snap rects into that pixel space.
         return sendResponse({
           ok: true,
           policy: (rec && rec.policy) || null,
           mask: vtRedact.maskDirectives(rulesOf(rec)),
-          // 'blur' ⇒ keyframes are 96px wide — the content script scales its
-          // click/snap rects into that pixel space.
           pixel: vtRedact.pixelPolicy(rulesOf(rec)),
         });
       }
