@@ -418,6 +418,23 @@ describe('redaction integration', () => {
     expect(url).toContain('id=7');
   });
 
+  it('form-encoded request bodies reach the engine WITH their content type', async () => {
+    // `y=1;password=…` defeats the generic text scanner (the benign pair's
+    // greedy value swallows the `;`-joined secret) — only the engine's form
+    // transform catches it, and that transform dispatches on the content type
+    // the bridge must forward.
+    served = new Response('ok', { status: 200, headers: { 'content-length': '2' } });
+    await fetch('https://api.test/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'y=1;password=FORM-SECRET',
+    });
+    await settled();
+    const req = String(recorded()[0].payload.reqBody);
+    expect(req).not.toContain('FORM-SECRET');
+    expect(req).toContain('y=1');
+  });
+
   it('a `;`-separated query pair cannot smuggle a secret past the URL scrub', async () => {
     served = new Response('ok', { status: 200, headers: { 'content-length': '2' } });
     await fetch('https://api.test/cb?a=1;access_token=SEMI-SECRET');

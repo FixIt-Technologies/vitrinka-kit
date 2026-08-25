@@ -46,9 +46,18 @@ export function redactText(text: string | undefined): string | undefined {
   return engineRedactText(rules, text);
 }
 
-/** Redact then cap (shape-aware order) under the active rules. */
-export function redactAndCap(body: string, cap: number): string | undefined {
-  return engineRedactAndCap(rules, body, cap);
+/**
+ * Redact then cap (shape-aware order) under the active rules. Pass the
+ * captured content type when known — the engine dispatches its form-encoded
+ * and multipart transforms on it; without it those bodies only get the
+ * generic text scanner.
+ */
+export function redactAndCap(
+  body: string,
+  cap: number,
+  contentType?: string,
+): string | undefined {
+  return engineRedactAndCap(rules, body, cap, contentType);
 }
 
 /** Scrub URL query/fragment secrets under the active rules. */

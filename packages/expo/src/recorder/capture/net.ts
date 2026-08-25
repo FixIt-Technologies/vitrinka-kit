@@ -63,9 +63,17 @@ function stillCapturing(id: string | null): boolean {
  * Redact + cap in the shape-appropriate ORDER — see `redactAndCap`
  *.
  */
-function capBody(body: unknown): string | undefined {
+function capBody(body: unknown, contentType?: string): string | undefined {
   if (typeof body !== 'string') return undefined;
-  return redactAndCap(body, BODY_CAP);
+  return redactAndCap(body, BODY_CAP, contentType);
+}
+
+/** Content-type from a raw (pre-redaction) header object, '' when absent. */
+function ctOf(h: Record<string, string> | undefined): string {
+  for (const [k, v] of Object.entries(h ?? {})) {
+    if (k.toLowerCase().replace(/[-_]/g, '') === 'contenttype') return v;
+  }
+  return '';
 }
 
 /** Narrow a RequestInfo to its object form for property access. */
@@ -116,15 +124,15 @@ function headersToObject(h: unknown): Record<string, string> | undefined {
   }
 }
 
-/** Redacted+capped request headers for a fetch call (init wins over Request). */
-function fetchReqHeaders(
+/** RAW request headers for a fetch call (init wins over Request) — redact before recording. */
+function rawFetchReqHeaders(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Record<string, string> | undefined {
   const fromInit = headersToObject(init?.headers);
-  if (fromInit) return redactHeaders(fromInit);
+  if (fromInit) return fromInit;
   const obj = init0(input) as { headers?: unknown };
-  return redactHeaders(headersToObject(obj.headers));
+  return headersToObject(obj.headers);
 }
 
 /** Parse XHR's getAllResponseHeaders() CRLF block into a plain object. */
@@ -173,7 +181,14 @@ function declaredLength(headers: Headers): number | null {
  */
 async function readBoundedBody(clone: Response, headers: Headers): Promise<string | undefined> {
   const raw = await readBoundedText(clone, headers);
-  return raw === undefined ? undefined : capBody(raw);
+  if (raw === undefined) return undefined;
+  let ct = '';
+  try {
+    ct = headers.get('content-type') ?? '';
+  } catch {
+    // stubbed Headers without get() — the engine falls back to shape sniffing
+  }
+  return capBody(raw, ct);
 }
 
 /**
@@ -331,14 +346,15 @@ export function patchNetwork(): void {
           if (!stillCapturing(origin)) return;
           const resBody = clone ? await readBoundedBody(clone, headers) : undefined;
           if (!stillCapturing(origin)) return;
+          const rawReqHeaders = rawFetchReqHeaders(input, init);
           recordNet({
             method,
             url,
             status,
             ms,
-            reqHeaders: fetchReqHeaders(input, init),
+            reqHeaders: redactHeaders(rawReqHeaders),
             resHeaders: redactHeaders(headersToObject(headers)),
-            reqBody: capBody(init?.body),
+            reqBody: capBody(init?.body, ctOf(rawReqHeaders)),
             resBody,
             via: 'fetch',
           });
@@ -397,20 +413,20 @@ export function patchNetwork(): void {
         // be waste), and a request that outlives its session must
         // not be attributed to the next one.
         if (!stillCapturing(origin)) return;
+        let rawResHeaders: Record<string, string> | undefined;
+        try {
+          rawResHeaders = parseRawHeaders(this.getAllResponseHeaders());
+        } catch {
+          rawResHeaders = undefined;
+        }
         let resBody: string | undefined;
         try {
           resBody =
             this.responseType === '' || this.responseType === 'text'
-              ? capBody(this.responseText)
+              ? capBody(this.responseText, ctOf(rawResHeaders))
               : undefined;
         } catch {
           resBody = undefined;
-        }
-        let resHeaders: Record<string, string> | undefined;
-        try {
-          resHeaders = redactHeaders(parseRawHeaders(this.getAllResponseHeaders()));
-        } catch {
-          resHeaders = undefined;
         }
         recordNet({
           method: meta.method,
@@ -418,8 +434,8 @@ export function patchNetwork(): void {
           status: this.status,
           ms: Date.now() - started,
           reqHeaders: redactHeaders(meta.reqHeaders),
-          resHeaders,
-          reqBody: capBody(body),
+          resHeaders: redactHeaders(rawResHeaders),
+          reqBody: capBody(body, ctOf(meta.reqHeaders)),
           resBody,
           via: 'xhr',
         });

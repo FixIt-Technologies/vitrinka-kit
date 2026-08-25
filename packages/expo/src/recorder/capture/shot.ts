@@ -8,7 +8,7 @@
 
 import { deleteAsync } from 'expo-file-system/legacy';
 import type { RefObject } from 'react';
-import { Dimensions, type View } from 'react-native';
+import { Dimensions, PixelRatio, type View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
 import { pixelPolicy } from './redact';
@@ -47,6 +47,18 @@ function blurCaptureOpts(): { width: number; height: number } | Record<string, n
   const { width, height } = Dimensions.get('window');
   const aspect = width > 0 && height > 0 ? height / width : 2;
   return { width: BLUR_WIDTH, height: Math.max(1, Math.round(BLUR_WIDTH * aspect)) };
+}
+
+/**
+ * Captured-image pixels per view POINT for a capture taken right now: screen
+ * density normally, BLUR_WIDTH / window width under 'blur'. Annotation rects
+ * must convert with THIS scale — a blurred frame is only BLUR_WIDTH px wide,
+ * so density-scaled coordinates would land far outside the image.
+ */
+function captureScale(): number {
+  if (pixelPolicy() !== 'blur') return PixelRatio.get();
+  const { width } = Dimensions.get('window');
+  return width > 0 ? BLUR_WIDTH / width : 1;
 }
 
 /** Release a temp capture we are not going to send. */
@@ -98,6 +110,12 @@ export function shoot(reason: 'nav' | 'touch' | 'start'): Promise<void> {
  * it leaves behind is fine (the ingest contract tolerates gaps).
  */
 export interface HeldShot {
+  /**
+   * Captured-image pixels per view POINT for THIS frame (screen density, or
+   * BLUR_WIDTH/window-width when the frame was captured blurred). Annotation
+   * rects convert view points to image pixels with this scale.
+   */
+  scale: number;
   commit(noteTs: string): void;
   discard(): void;
 }
@@ -112,10 +130,14 @@ export async function captureHeldShot(): Promise<HeldShot | null> {
   if (!rec || rec.paused || rec.dead || !rootRef?.current) return null;
   const origin = rec.sessionId;
   let tmpUri: string;
+  let frameScale = 1;
   try {
     // Let the marquee's final frame paint before freezing it.
     await new Promise<void>((res) => requestAnimationFrame(() => setTimeout(res, 80)));
     if (!isSessionLive(origin) || !rootRef.current) return null;
+    // Freeze the scale at capture time — a policy flip between the capture
+    // and the note commit must not desync rect space from the pixels.
+    frameScale = captureScale();
     tmpUri = await captureRef(rootRef.current, {
       format: 'jpg',
       quality: 0.7,
@@ -140,6 +162,7 @@ export async function captureHeldShot(): Promise<HeldShot | null> {
   const route = { ...currentRoute };
   let settled = false;
   return {
+    scale: frameScale,
     commit: (noteTs) => {
       if (settled) return;
       settled = true;
