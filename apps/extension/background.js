@@ -596,12 +596,13 @@ function redactUrl(rec, raw) {
   return vtRedact.redactUrl(rulesOf(rec), raw || "");
 }
 
-// redactBody scrubs one (already BODY_CAP-capped) request/response body:
-// JSON recursively (with a truncation fallback so the cap never becomes a
-// bypass), form-encoded and multipart key-wise, everything else via the
-// pattern/text pass.
-function redactBody(rec, body, contentType) {
-  return vtRedact.redactBody(rulesOf(rec), body || "", contentType || "");
+// redactBodyCapped scrubs one request/response body and caps it to BODY_CAP
+// in the engine's shape-aware ORDER (REDACTION-SPEC §Bodies): JSON redacts
+// WHOLE then caps — slicing first would downgrade exactly the payloads most
+// likely to carry credentials to the weaker truncation fallback. Form-encoded
+// and multipart bodies scrub key-wise; everything else gets the text pass.
+function redactBodyCapped(rec, body, contentType) {
+  return vtRedact.redactAndCap(rulesOf(rec), body || "", BODY_CAP, contentType || "");
 }
 
 // headerCT extracts a content-type from a raw CDP header map ("" if absent).
@@ -681,7 +682,7 @@ chrome.debugger.onEvent.addListener(async (source, method, params) => {
     const r = params.request;
     inflight.set(key, {
       method: r.method, url: redactUrl(rec, r.url),
-      reqBody: redactBody(rec, (r.postData || "").slice(0, BODY_CAP), headerCT(r.headers)),
+      reqBody: redactBodyCapped(rec, r.postData || "", headerCT(r.headers)),
       reqHeaders: capHeaders(r.headers, rec),
       start: params.timestamp, type: params.type, sessionId: source.sessionId,
     });
@@ -706,7 +707,7 @@ chrome.debugger.onEvent.addListener(async (source, method, params) => {
       try {
         const target = f.sessionId ? { tabId: source.tabId, sessionId: f.sessionId } : { tabId: source.tabId };
         const b = await chrome.debugger.sendCommand(target, "Network.getResponseBody", { requestId: params.requestId });
-        resBody = redactBody(rec, (b.base64Encoded ? "" : b.body || "").slice(0, BODY_CAP), f.mime || "");
+        resBody = redactBodyCapped(rec, b.base64Encoded ? "" : b.body || "", f.mime || "");
       } catch { /* body already gone — metadata still lands */ }
     }
     await pushEvents([{
@@ -1337,9 +1338,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case "vt-policy": {
         // The content script asks before starting rrweb: maskAllInputs is its
         // fail-closed default, the policy only ADDS maskAllText or
-        // (self-host) fullFidelity.
+        // (self-host) fullFidelity. `mask` is the ENGINE's directive mapping
+        // (maskDirectives) so the DOM semantics can never drift from the
+        // shared implementation; the raw policy rides along for reference.
         const rec = await getState();
-        return sendResponse({ ok: true, policy: (rec && rec.policy) || null });
+        return sendResponse({
+          ok: true,
+          policy: (rec && rec.policy) || null,
+          mask: vtRedact.maskDirectives(rulesOf(rec)),
+        });
       }
       case "vt-health":
         return sendResponse(await health());

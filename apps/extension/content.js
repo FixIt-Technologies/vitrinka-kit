@@ -75,20 +75,23 @@
       // session timeline (replay may be incomplete from there).
       //
       // Redaction (SaaS data-security decision #2): ask the SW for the
-      // workspace policy first — maskAllInputs is the fail-closed DEFAULT
-      // (an unreachable SW still records with every input masked); the
-      // policy can only add maskAllText or, self-host only, fullFidelity.
-      // The one-message wait costs milliseconds before the full snapshot.
+      // engine-computed mask directives first — maskAllInputs is the
+      // fail-closed DEFAULT (an unreachable SW still records with every
+      // input masked); the policy can only add maskAllText or, self-host
+      // only, fullFidelity. The directive mapping itself lives in the shared
+      // engine (maskDirectives via the SW's vt-policy response) so DOM
+      // semantics can never drift from it; this side only translates the
+      // directives into rrweb options. The one-message wait costs
+      // milliseconds before the full snapshot.
       send({ type: "vt-policy" }).then((r) => {
         try {
-          const pol = (r && r.policy) || null;
+          // Fail closed when the SW (or an older SW build) sent no directives.
+          const mask = (r && r.mask) || { maskAllInputs: true, maskAllText: false };
           const opts = { emit: (ev) => rrBuf.push(ev), inlineImages: true, collectFonts: true };
-          if (!(pol && pol.fullFidelity)) {
-            opts.maskAllInputs = true;
-            if (pol && pol.maskAllText) {
-              opts.maskAllText = true;      // rrweb ≥2.x spelling
-              opts.maskTextSelector = "*";  // alpha-era spelling
-            }
+          if (mask.maskAllInputs) opts.maskAllInputs = true;
+          if (mask.maskAllText) {
+            opts.maskAllText = true;                                  // rrweb ≥2.x spelling
+            opts.maskTextSelector = mask.maskTextSelector || "*";     // alpha-era spelling
           }
           rrRec(opts);
         } catch (e) { console.warn("vitrinka: rrweb failed to start", e); }
