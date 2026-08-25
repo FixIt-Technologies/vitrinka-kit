@@ -658,7 +658,11 @@ async function fetchPolicy() {
       new Promise((_res, rej) =>
         setTimeout(() => rej(new Error("policy fetch timed out")), 10_000)),
     ]);
-    return (res && res.policy) || null;
+    // A 2xx WITHOUT the policy envelope (204, proxy-stripped body) is
+    // out-of-contract — UNKNOWN, not "no policy": the real endpoint always
+    // carries a `policy` key, even for the zero policy.
+    if (!res || typeof res !== "object" || !("policy" in res)) return undefined;
+    return res.policy || null;
   } catch (e) {
     const status = statusOf(e);
     if (status >= 400 && status < 500) {
