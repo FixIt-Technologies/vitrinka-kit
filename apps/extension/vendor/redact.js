@@ -441,10 +441,12 @@ function looksLikeJson(text) {
 /**
  * Scrub a multipart/form-data body: every form field whose name is a
  * sensitive body key loses its value; other part values (including file
- * parts) pass the extra patterns. Rebuilt with the SAME boundary. Returns
- * null — caller falls back to pattern-only text masking — when the
- * content-type carries no boundary or the structure won't parse (typically
- * truncated at the client cap): never emit a half-scrubbed reconstruction.
+ * parts) get the FULL free-text scan — a part value can be a header line, a
+ * bare JWT, or embedded JSON carrying sensitive keys. Rebuilt with the SAME
+ * boundary. Returns null — caller falls back to free-text masking over the
+ * whole body — when the content-type carries no boundary or the structure
+ * won't parse (typically truncated at the client cap): never emit a
+ * half-scrubbed reconstruction.
  */
 function scrubMultipart(rules, body, contentType) {
     const bm = /boundary="?([^";]+)"?/i.exec(contentType);
