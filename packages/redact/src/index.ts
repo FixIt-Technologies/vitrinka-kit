@@ -342,7 +342,14 @@ export function scrubPairs(
       const i = p.indexOf('=');
       const key = i >= 0 ? p.slice(0, i) : p;
       const name = safeDecode(key.replace(/\+/g, ' '));
-      if (sensitive(rules, name)) {
+      // Hash-route fragments nest a query inside one "pair":
+      // `#/reset?token=SECRET` arrives as key `/reset?token`. Token matching
+      // catches suffix-shaped names, but set-only keys (`card`, policy
+      // extraBodyKeys) match on the WHOLE normalized name — inspect the part
+      // after the last `?` too, or nested keys evade the equality matchers.
+      const q = name.lastIndexOf('?');
+      const nested = q >= 0 ? name.slice(q + 1) : null;
+      if (sensitive(rules, name) || (nested !== null && sensitive(rules, nested))) {
         changed = true;
         return `${key}=${REDACTED}`;
       }
@@ -487,15 +494,26 @@ function scrubTree(rules: RuleSet, v: unknown, depth: number): unknown {
  * redaction bypass. The string alternative accepts a missing closing quote
  * (truncation); the bare alternative stops at JSON structure.
  */
+/** Decode JSON string escapes in a KEY for classification (`password`
+ * ≡ `password` to a real parser, so it must be to the fallback too). */
+function decodeJsonKey(key: string): string {
+  if (!key.includes('\\')) return key;
+  return key.replace(/\\u([0-9A-Fa-f]{4})|\\(.)/g, (_m, hex: string, ch: string) =>
+    hex !== undefined ? String.fromCharCode(Number.parseInt(hex, 16)) : ch,
+  );
+}
+
 function scrubTruncatedJson(rules: RuleSet, body: string): string {
   // The bare-value alternative stops at JSON STRUCTURE (`{`, `[`, `"` as well
   // as `,}]`): a benign key must consume only its scalar value, never a
   // nested object — `"nested":{"access_token":…}` would otherwise ride inside
-  // the benign match and the sensitive pair would never be scanned.
+  // the benign match and the sensitive pair would never be scanned. The key
+  // class admits JSON escapes, DECODED before classification — a real parser
+  // sees `password` as `password`, so the fallback must too.
   return body.replace(
-    /("([A-Za-z0-9_-]+)"\s*:\s*)("(?:[^"\\]|\\.)*"?|[^,{}[\]"\r\n]*)/g,
+    /("((?:[A-Za-z0-9_-]|\\u[0-9A-Fa-f]{4}|\\.)+)"\s*:\s*)("(?:[^"\\]|\\.)*"?|[^,{}[\]"\r\n]*)/g,
     (m, pre: string, key: string) =>
-      sensitiveBodyKey(rules, key) ? `${pre}"${REDACTED}"` : m,
+      sensitiveBodyKey(rules, decodeJsonKey(key)) ? `${pre}"${REDACTED}"` : m,
   );
 }
 
@@ -578,7 +596,12 @@ export function redactBody(rules: RuleSet, body: string, contentType?: string): 
     if (ct.includes('multipart/form-data')) {
       const scrubbed = scrubMultipart(rules, body, contentType ?? '');
       if (scrubbed !== null) return scrubbed;
-      return maskText(rules, body);
+      // Unparseable (truncated at a cap, missing boundary): FAIL CLOSED and
+      // omit the body. The free-text scanner cannot see multipart structure —
+      // a leading `name="password"` part's raw value sits on its own line
+      // where no key=value rule fires — so emitting a scan of it would leak
+      // exactly the fields the key scrub exists for.
+      return `[multipart body omitted: unparseable (${body.length} chars)]`;
     }
     return maskText(rules, body);
   } catch {
