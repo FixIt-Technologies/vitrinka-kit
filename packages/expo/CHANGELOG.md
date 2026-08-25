@@ -11,6 +11,9 @@
   (`reqHeaders`/`resHeaders`) on both the fetch and XHR paths.
 - URL scrubbing now covers the fragment and `;`-separated pairs (the engine's
   dedicated URL transform, shared with the server's ingest backstop).
+- Multipart bodies beyond the 64 KiB cap now record as an omission marker
+  rather than a partially scanned body — a truncated multipart body cannot be
+  parsed into parts, so the recorder fails closed.
 - Under a `maskAllText` policy, screenshot keyframes are captured at a
   strongly reduced resolution (text unreadable, layout visible).
 - Initial release: the journey recorder (`@vitrinka/expo/recorder`), extracted
