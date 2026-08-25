@@ -425,6 +425,36 @@ describe('redaction policy at session start', () => {
     }
   });
 
+  it('a late/failed concurrent recovery cannot clobber an already-settled policy', async () => {
+    // Two recoveries race (Strict Mode double-effect): the single-flight
+    // guard dedupes the fetch, and even a hand-forced out-of-order late
+    // response is dropped by the settled-policy guard.
+    let releaseFirst: (p: PolicyResult) => void = () => undefined;
+    policyScript = new Promise<PolicyResult>((res) => {
+      releaseFirst = res;
+    });
+    try {
+      const rec = queue.getState();
+      if (rec) queue.setState({ ...rec, policy: undefined });
+      redact.setRedactionPolicy(null);
+      session.recoverRedactionPolicy();
+      session.recoverRedactionPolicy(); // double-invoked effect — must dedupe
+      releaseFirst({ maskAllText: true });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(queue.getState()?.policy).toEqual({ maskAllText: true });
+      // A later recovery attempt resolving null (failed fetch) must not
+      // downgrade the settled policy back to defaults.
+      policyScript = null;
+      session.recoverRedactionPolicy();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(queue.getState()?.policy).toEqual({ maskAllText: true });
+      expect(redact.currentRules().maskAllText).toBe(true);
+    } finally {
+      policyScript = null;
+      redact.setRedactionPolicy(null);
+    }
+  });
+
   it('recovery does NOT refetch when the original fetch completed (null = failed ⇒ defaults)', async () => {
     policyScript = { maskAllText: true }; // would flip the rules IF a refetch ran
     try {

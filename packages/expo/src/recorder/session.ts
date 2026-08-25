@@ -80,14 +80,26 @@ function appId(): string {
  * defaults — safe for the built-ins, but workspace extras and maskAllText
  * (screenshot blur) would silently not apply.
  */
+let policyRecoveryInFlight = false;
+
 export function recoverRedactionPolicy(): void {
   const rec = getState();
   if (!rec) return;
   setRedactionPolicy(rec.policy ?? null);
   if (rec.policy !== undefined) return;
+  // Single-flight: a double-invoked mount effect (React Strict Mode, provider
+  // remount) must not race two fetches whose LATER failure could overwrite an
+  // EARLIER success with null.
+  if (policyRecoveryInFlight) return;
+  policyRecoveryInFlight = true;
   void fetchPolicy().then((policy) => {
+    policyRecoveryInFlight = false;
     const live = getState();
     if (live?.sessionId !== rec.sessionId) return;
+    // Settled-policy guard, same reason as the single-flight: once ANY path
+    // recorded a final answer (fetched policy, or startSession's own apply),
+    // a late recovery response must not clobber it.
+    if (live.policy !== undefined) return;
     setRedactionPolicy(policy);
     setState({ ...live, policy });
   });
