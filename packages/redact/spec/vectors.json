@@ -143,6 +143,28 @@
       "mustNotContain": ["MULTI-SECRET"]
     },
     {
+      "name": "form body: benign-keyed JWT credential is still text-scanned (CT path is a superset)",
+      "surface": "body",
+      "contentType": "application/x-www-form-urlencoded",
+      "input": "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&client_assertion=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.SFlKc2VjcmV0U2ln",
+      "mustNotContain": ["eyJhbGciOiJIUzI1NiJ9"],
+      "mustContain": ["grant_type="]
+    },
+    {
+      "name": "multipart: benign part carrying a Bearer header line is text-scanned",
+      "surface": "body",
+      "contentType": "multipart/form-data; boundary=b123",
+      "input": "--b123\r\nContent-Disposition: form-data; name=\"payload\"\r\n\r\nAuthorization: Bearer sk_live_ABC123SECRET\r\n--b123--\r\n",
+      "mustNotContain": ["sk_live_ABC123SECRET"]
+    },
+    {
+      "name": "multipart: benign part carrying embedded JSON with a sensitive key is scanned",
+      "surface": "body",
+      "contentType": "multipart/form-data; boundary=b123",
+      "input": "--b123\r\nContent-Disposition: form-data; name=\"metadata\"\r\n\r\n{\"access_token\":\"sk_live_SECRET\"}\r\n--b123--\r\n",
+      "mustNotContain": ["sk_live_SECRET"]
+    },
+    {
       "name": "truncated JSON still scrubs known keys (cap is never a bypass)",
       "surface": "body",
       "contentType": "application/json",
