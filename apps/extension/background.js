@@ -1389,6 +1389,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           ok: true,
           policy: (rec && rec.policy) || null,
           mask: vtRedact.maskDirectives(rulesOf(rec)),
+          // 'blur' ⇒ keyframes are 96px wide — the content script scales its
+          // click/snap rects into that pixel space.
+          pixel: vtRedact.pixelPolicy(rulesOf(rec)),
         });
       }
       case "vt-health":

@@ -35,9 +35,21 @@
     return parts.join(" > ");
   };
 
+  // Under a blur policy (maskAllText) keyframes are downscaled to 96px wide,
+  // so rects must land in THAT pixel space — device-pixel coordinates would
+  // sit far outside the image. Set from the vt-policy response; recomputed at
+  // use time so a window resize can't stale the factor.
+  let blurShots = false;
+  const imageScale = () => {
+    const s = window.devicePixelRatio || 1;
+    // CSS px → captured-image px: device scale normally; 96/viewport-width
+    // when keyframes are blurred to 96px wide.
+    if (!blurShots) return s;
+    return window.innerWidth > 0 ? 96 / window.innerWidth : s;
+  };
   const imageRect = (el) => {
     const r = el.getBoundingClientRect();
-    const s = window.devicePixelRatio || 1;
+    const s = imageScale();
     return { x: Math.round(r.x * s), y: Math.round(r.y * s), w: Math.round(r.width * s), h: Math.round(r.height * s) };
   };
 
@@ -85,6 +97,7 @@
       // milliseconds before the full snapshot.
       send({ type: "vt-policy" }).then((r) => {
         try {
+          blurShots = (r && r.pixel) === "blur";
           // Fail closed when the SW (or an older SW build) sent no directives.
           const mask = (r && r.mask) || { maskAllInputs: true, maskAllText: false };
           const opts = { emit: (ev) => rrBuf.push(ev), inlineImages: true, collectFonts: true };
