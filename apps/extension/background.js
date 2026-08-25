@@ -14,6 +14,7 @@
 // one uploader drains the queue FIFO. Every entry point rehydrates first.
 
 import { vtdb } from "./db.js";
+import * as vtRedact from "./vendor/redact.js";
 import { newerVersion } from "./version.js";
 
 const FLUSH_MS = 2000;
@@ -569,19 +570,66 @@ async function detachAll() {
 // plain memory is fine; a SW restart only drops requests mid-flight).
 const inflight = new Map();
 
-// Headers ride along capped (D2 "all headers"): individual values bounded,
-// total budget ~8 KiB per side so one giant cookie can't bloat the event.
-function capHeaders(h) {
-  if (!h) return undefined;
-  const out = {};
-  let budget = 8192;
-  for (const [k, v] of Object.entries(h)) {
-    const val = String(v).slice(0, 1024);
-    budget -= k.length + val.length;
-    if (budget < 0) { out["…"] = "(truncated)"; break; }
-    out[k] = val;
+// ---------------------------------------------------------------------------
+// redaction (SaaS data-security decision #2) — the shared @vitrinka/redact
+// engine (vendor/redact.js, generated from packages/redact).
+//
+// Safe-by-default capture-side scrubbing, mirroring the server's ingest
+// engine: auth-bearing header VALUES, known-sensitive JSON/form body keys and
+// URL query/fragment secrets never leave the machine. The workspace policy
+// (GET /api/v1/recorder/policy, fetched at session start, riding in `rec` so
+// every SW wake has it) adds extra names, regex patterns, and — self-host
+// only — the fullFidelity escape hatch. The server re-applies the same policy
+// at ingest as the backstop; this side is defense in depth + smaller stored
+// payloads. Fail CLOSED: no policy (fetch failed, old server) means the
+// engine defaults, never capture-everything.
+
+// Compiled rules for a rec's policy (the engine caches by policy identity).
+function rulesOf(rec) {
+  return vtRedact.compileRules((rec && rec.policy) || null);
+}
+
+// redactUrl scrubs sensitive query/fragment parameter values from a URL
+// before it is stored — OAuth callbacks, magic links, SAS URLs. Benign URLs
+// pass through byte-identical.
+function redactUrl(rec, raw) {
+  return vtRedact.redactUrl(rulesOf(rec), raw || "");
+}
+
+// redactBody scrubs one (already BODY_CAP-capped) request/response body:
+// JSON recursively (with a truncation fallback so the cap never becomes a
+// bypass), form-encoded and multipart key-wise, everything else via the
+// pattern/text pass.
+function redactBody(rec, body, contentType) {
+  return vtRedact.redactBody(rulesOf(rec), body || "", contentType || "");
+}
+
+// headerCT extracts a content-type from a raw CDP header map ("" if absent).
+function headerCT(h) {
+  for (const k of Object.keys(h || {})) {
+    if (k.toLowerCase().replace(/[-_]/g, "") === "contenttype") return String(h[k]);
   }
-  return out;
+  return "";
+}
+
+// Headers ride along capped (D2 "all headers") and REDACTED: sensitive names
+// lose their value before anything is stored; individual values bounded,
+// total budget ~8 KiB per side so one giant cookie can't bloat the event.
+function capHeaders(h, rec) {
+  if (!h) return undefined;
+  return vtRedact.redactHeaders(rulesOf(rec), h);
+}
+
+// fetchPolicy pulls the workspace redaction policy at session start. null
+// (server too old, network down, 4xx) = the engine's safe defaults — never
+// full fidelity, which only ever arrives as an explicit server-approved flag.
+async function fetchPolicy() {
+  try {
+    return (await api("GET", "/api/v1/recorder/policy")).policy || null;
+  } catch (e) {
+    console.warn("vitrinka: redaction policy fetch failed — using safe defaults", e);
+    return null;
+  }
 }
 
 chrome.debugger.onEvent.addListener(async (source, method, params) => {
@@ -624,7 +672,7 @@ chrome.debugger.onEvent.addListener(async (source, method, params) => {
     // WS visibility (D2): connection-level capture; frame capture is a
     // documented follow-up (README known limits).
     await pushEvents([{ tabId: tab.id, tabHost: tab.host, kind: "request", payload: {
-      method: "WS", url: params.url, status: 101, type: "WebSocket",
+      method: "WS", url: redactUrl(rec, params.url), status: 101, type: "WebSocket",
     } }]);
     return;
   }
@@ -632,15 +680,16 @@ chrome.debugger.onEvent.addListener(async (source, method, params) => {
   if (method === "Network.requestWillBeSent") {
     const r = params.request;
     inflight.set(key, {
-      method: r.method, url: r.url, reqBody: (r.postData || "").slice(0, BODY_CAP),
-      reqHeaders: capHeaders(r.headers),
+      method: r.method, url: redactUrl(rec, r.url),
+      reqBody: redactBody(rec, (r.postData || "").slice(0, BODY_CAP), headerCT(r.headers)),
+      reqHeaders: capHeaders(r.headers, rec),
       start: params.timestamp, type: params.type, sessionId: source.sessionId,
     });
   } else if (method === "Network.responseReceived") {
     const f = inflight.get(key);
     if (f) {
       f.status = params.response.status; f.mime = params.response.mimeType; f.type = params.type;
-      f.resHeaders = capHeaders(params.response.headers);
+      f.resHeaders = capHeaders(params.response.headers, rec);
     }
   } else if (method === "Network.loadingFinished" || method === "Network.loadingFailed") {
     const f = inflight.get(key);
@@ -657,7 +706,7 @@ chrome.debugger.onEvent.addListener(async (source, method, params) => {
       try {
         const target = f.sessionId ? { tabId: source.tabId, sessionId: f.sessionId } : { tabId: source.tabId };
         const b = await chrome.debugger.sendCommand(target, "Network.getResponseBody", { requestId: params.requestId });
-        resBody = (b.base64Encoded ? "" : b.body || "").slice(0, BODY_CAP);
+        resBody = redactBody(rec, (b.base64Encoded ? "" : b.body || "").slice(0, BODY_CAP), f.mime || "");
       } catch { /* body already gone — metadata still lands */ }
     }
     await pushEvents([{
@@ -713,6 +762,9 @@ async function shoot(tabId, payload) {
   if (!capturing(rec)) return;
   const tab = rec.tabs[String(tabId)];
   if (!tab) return;
+  // The tab URL can be an OAuth callback / magic link — same query-secret
+  // scrub as recorded network URLs, for every shoot() call site at once.
+  if (payload && payload.url) payload = { ...payload, url: redactUrl(rec, payload.url) };
   // The session this frame belongs to, fixed BEFORE the capture awaits below
   // (review r3650595572): a stop — or a stop followed by a start — completing
   // during them would otherwise file these pixels into whatever session is
@@ -763,8 +815,11 @@ async function startSession(title) {
   const ses = await api("POST", "/api/v1/sessions", {
     host, title: title || "", meta: { userAgent: navigator.userAgent, recorder: "extension/" + chrome.runtime.getManifest().version },
   });
+  // The workspace redaction policy rides in rec so every SW wake has it
+  // without a network round trip; a failed fetch means the safe defaults.
+  const policy = await fetchPolicy();
   await setState({
-    sessionId: ses.id, project: ses.project, environment: ses.environment,
+    sessionId: ses.id, project: ses.project, environment: ses.environment, policy,
     title: ses.title, startedAt: ses.startedAt, seq: 0, paused: false, tabs: {},
     // Active-time bookkeeping: elapsed = activeMs + (now - resumeAt while
     // running). The HUD clock freezes on pause because of this, not luck.
@@ -792,8 +847,9 @@ async function startSession(title) {
 async function continueSession(sessionId) {
   const ses = await api("GET", `/api/v1/sessions/${sessionId}`);
   await api("PATCH", `/api/v1/sessions/${sessionId}`, { status: "recording" });
+  const policy = await fetchPolicy();
   await setState({
-    sessionId: ses.id, project: ses.project, environment: ses.environment,
+    sessionId: ses.id, project: ses.project, environment: ses.environment, policy,
     title: ses.title, startedAt: new Date().toISOString(), seq: ses.maxSeq || 0,
     paused: false, tabs: {}, activeMs: 0, resumeAt: new Date().toISOString(),
   });
@@ -1050,7 +1106,7 @@ chrome.webNavigation.onCommitted.addListener(async (d) => {
   const known = rec.tabs[String(d.tabId)];
   if (known) {
     // Full navigation re-injects the content script.
-    await pushEvents([{ tabId: known.id, tabHost: known.host, kind: "nav", payload: { url: d.url, route: routeOf(d.url) } }]);
+    await pushEvents([{ tabId: known.id, tabHost: known.host, kind: "nav", payload: { url: redactUrl(rec, d.url), route: routeOf(d.url) } }]);
     try {
       await chrome.scripting.executeScript({ target: { tabId: d.tabId }, files: ["vendor/rrweb-record.min.js", "content.js"] });
     } catch { /* chrome:// etc. */ }
@@ -1065,7 +1121,7 @@ chrome.webNavigation.onCommitted.addListener(async (d) => {
     const r = await api("GET", `/api/v1/projects/resolve?host=${encodeURIComponent(host)}`);
     if (r.matched && r.project === rec.project) {
       await attachTab(d.tabId, d.url);
-      await pushEvents([{ tabId: (await tabInfo(d.tabId)).id, tabHost: host, kind: "nav", payload: { url: d.url, route: routeOf(d.url) } }]);
+      await pushEvents([{ tabId: (await tabInfo(d.tabId)).id, tabHost: host, kind: "nav", payload: { url: redactUrl(rec, d.url), route: routeOf(d.url) } }]);
       await shoot(d.tabId, { route: routeOf(d.url), url: d.url });
     }
   } catch { /* resolve down — tab simply doesn't join */ }
@@ -1076,7 +1132,8 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(async (d) => {
   if (d.frameId !== 0) return;
   const tab = await tabInfo(d.tabId);
   if (!tab) return;
-  await pushEvents([{ tabId: tab.id, tabHost: tab.host, kind: "nav", payload: { url: d.url, route: routeOf(d.url), spa: true } }]);
+  const rec = await getState();
+  await pushEvents([{ tabId: tab.id, tabHost: tab.host, kind: "nav", payload: { url: redactUrl(rec, d.url), route: routeOf(d.url), spa: true } }]);
   await shoot(d.tabId, { route: routeOf(d.url), url: d.url });
 });
 
@@ -1276,6 +1333,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case "vt-status": {
         const rec = await getState();
         return sendResponse({ rec, elapsedMs: elapsedOf(rec), health: await health() });
+      }
+      case "vt-policy": {
+        // The content script asks before starting rrweb: maskAllInputs is its
+        // fail-closed default, the policy only ADDS maskAllText or
+        // (self-host) fullFidelity.
+        const rec = await getState();
+        return sendResponse({ ok: true, policy: (rec && rec.policy) || null });
       }
       case "vt-health":
         return sendResponse(await health());

@@ -60,10 +60,12 @@ conformance vectors in
 - **URLs**: sensitive query AND fragment parameters are scrubbed
   (OAuth callbacks, magic links, SAS URLs), with `;`-separated pairs handled.
 
-The Expo recorder applies this engine today; the browser extension's port
-ships in its next release (the vitrinka server additionally applies the same
-redaction at ingest for every client, so recordings from either client never
-store raw secrets).
+Both clients apply this engine — the Expo recorder imports it directly, the
+browser extension carries a generated copy (`vendor/redact.js`, kept in sync
+by a CI drift check) and additionally records the rrweb DOM stream with input
+values masked by default. The vitrinka server applies the same redaction at
+ingest for every client as the backstop, so recordings never store raw
+secrets either way.
 
 At session start the recorder fetches your workspace's redaction policy
 (`GET /api/v1/recorder/policy`), which can only ADD rules: extra header
