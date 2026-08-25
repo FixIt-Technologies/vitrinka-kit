@@ -14,6 +14,7 @@ any host other than that server. The wire types live in
 four routes:
 
 ```
+GET   /api/v1/recorder/policy      workspace redaction policy (session start)
 POST  /api/v1/sessions             create a recording session
 POST  /api/v1/sessions/:id/events  the event stream (batched)
 POST  /api/v1/sessions/:id/shot    screenshot keyframes
@@ -39,20 +40,43 @@ Only during a session you explicitly start:
 |---|---|---|
 | Screenshots | keyframes on navigation/touch (throttled) | keyframes + rrweb DOM stream |
 | Interactions | tap coordinates + pressed-element label + route | clicks, navigation |
-| Network | method, URL, status, duration, capped request/response bodies | API calls incl. bodies (via CDP) |
+| Network | method, URL, status, duration, capped request/response headers + bodies (redacted) | API calls incl. headers + bodies (via CDP) |
 | Console | errors/warnings | errors |
 | Notes | notes you type in the HUD | notes you type in the popup |
 
 ## Redaction
 
-Network capture redacts secrets **before anything is buffered or sent**:
-secret-named keys (`password`, `token`, `authorization`, `cookie`, `apikey`,
-multi-word forms like `accessToken`/`refreshToken`, …) are masked in JSON
-bodies, headers, and URL query strings, including URL-encoded and
-double-encoded forms. The policy is one shared predicate
-([`capture/redact.ts`](../packages/expo/src/recorder/capture/redact.ts)) with
-its own test suite. Screenshots are not content-filtered — do not record
-against screens showing data you would not put on the session's board.
+Capture redacts secrets **before anything is buffered or sent**, driven by
+the shared engine [`@vitrinka/redact`](../packages/redact) (spec + portable
+conformance vectors in
+[`packages/redact/spec`](../packages/redact/spec/REDACTION-SPEC.md)):
+
+- **Headers**: auth-bearing names (`authorization`, `cookie`, `set-cookie`,
+  `x-api-key`, any `…api-key`/`…token` variant, …) lose their values.
+- **Bodies**: secret-named keys (`password`, `token`, `card_number`, `ssn`,
+  multi-word forms like `accessToken`, …) are masked recursively in JSON,
+  form-encoded and multipart bodies — including bodies truncated at the size
+  cap, and URL-encoded / double-encoded forms.
+- **URLs**: sensitive query AND fragment parameters are scrubbed
+  (OAuth callbacks, magic links, SAS URLs), with `;`-separated pairs handled.
+
+The Expo recorder applies this engine today; the browser extension's port
+ships in its next release (the vitrinka server additionally applies the same
+redaction at ingest for every client, so recordings from either client never
+store raw secrets).
+
+At session start the recorder fetches your workspace's redaction policy
+(`GET /api/v1/recorder/policy`), which can only ADD rules: extra header
+names, extra body keys, extra patterns, or `maskAllText`. If the fetch fails,
+the built-in defaults above apply — **never** capture-everything. A
+`fullFidelity` policy (self-hosted deployments only; the server refuses to
+serve it otherwise) restores unredacted capture.
+
+Screenshots carry real rendered pixels and are not content-filtered by
+default. Under a `maskAllText` policy the Expo recorder captures keyframes at
+a strongly reduced resolution (text unreadable, layout visible). Otherwise:
+do not record against screens showing data you would not put on the
+session's board.
 
 ## Retention & access
 

@@ -64,8 +64,13 @@ const apiStatus = (await import(
   '../api-status'
 )) as typeof import('../api-status');
 
+// Scripted workspace policy for the fetchPolicy mock (null = fetch failed /
+// server too old ⇒ the engine's safe defaults).
+let policyScript: import('@vitrinka/redact').RedactionPolicy | null = null;
+
 mock.module('../api', () => ({
   api,
+  fetchPolicy: async () => policyScript,
   uploadShot: async () => ({ blobKey: 'b1' }),
   permanentStatus: apiStatus.permanentStatus,
   VitrinkaApiError: apiStatus.VitrinkaApiError,
@@ -79,6 +84,9 @@ const queue = (await import(
 const session = (await import(
   '../session'
 )) as typeof import('../session');
+const redact = (await import(
+  '../capture/redact'
+)) as typeof import('../capture/redact');
 
 beforeEach(() => {
   calls.length = 0;
@@ -336,6 +344,42 @@ function createBody(): Record<string, unknown> {
   const call = api.mock.calls.find((c) => c[1] === '/api/v1/sessions');
   return (call?.[2] ?? {}) as Record<string, unknown>;
 }
+
+describe('redaction policy at session start', () => {
+  it('stores the fetched workspace policy on the session and applies it', async () => {
+    policyScript = { maskAllText: true, extraBodyKeys: ['internalId'] };
+    try {
+      await session.startSession();
+      expect(queue.getState()?.policy).toEqual(policyScript);
+      expect(redact.currentRules().maskAllText).toBe(true);
+    } finally {
+      policyScript = null;
+      redact.setRedactionPolicy(null);
+    }
+  });
+
+  it('FAIL CLOSED: a failed policy fetch means the safe defaults, never full fidelity', async () => {
+    policyScript = null; // fetchPolicy resolved null — fetch failed / old server
+    await session.startSession();
+    expect(queue.getState()?.policy).toBeNull();
+    const rules = redact.currentRules();
+    expect(rules.full).toBe(false);
+    expect(redact.redactHeaders({ Authorization: 'Bearer x' })?.Authorization).toBe('[redacted]');
+  });
+
+  it('stopSession resets the active rules to the defaults', async () => {
+    policyScript = { fullFidelity: true };
+    try {
+      await session.startSession();
+      expect(redact.currentRules().full).toBe(true);
+      await session.stopSession();
+      expect(redact.currentRules().full).toBe(false);
+    } finally {
+      policyScript = null;
+      redact.setRedactionPolicy(null);
+    }
+  });
+});
 
 describe('startSession lane + tagging', () => {
   it('a human HUD start stays on the app-id rule and attaches nothing', async () => {

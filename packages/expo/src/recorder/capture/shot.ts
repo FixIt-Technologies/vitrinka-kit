@@ -8,8 +8,10 @@
 
 import { deleteAsync } from 'expo-file-system/legacy';
 import type { RefObject } from 'react';
-import type { View } from 'react-native';
+import { Dimensions, type View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
+
+import { pixelPolicy } from './redact';
 
 import { uploadShot } from '../api';
 import {
@@ -26,6 +28,26 @@ import {
 import { currentRoute, notify } from '../state';
 
 const SHOT_THROTTLE_MS = 700;
+
+/**
+ * Downscale width used when the workspace policy demands pixel masking
+ * (`maskAllText` ⇒ pixelPolicy 'blur'). Screenshots carry real rendered text
+ * — there is no DOM to mask — so the frame is captured at a resolution where
+ * text is unreadable while layout, color and navigation state survive.
+ */
+const BLUR_WIDTH = 96;
+
+/**
+ * captureRef sizing for the active redaction rules: normal captures pass no
+ * size (full fidelity of the frame); under 'blur' the output is resized to
+ * BLUR_WIDTH keeping the window's aspect ratio.
+ */
+function blurCaptureOpts(): { width: number; height: number } | Record<string, never> {
+  if (pixelPolicy() !== 'blur') return {};
+  const { width, height } = Dimensions.get('window');
+  const aspect = width > 0 && height > 0 ? height / width : 2;
+  return { width: BLUR_WIDTH, height: Math.max(1, Math.round(BLUR_WIDTH * aspect)) };
+}
 
 /** Release a temp capture we are not going to send. */
 function discardTmp(uri: string): void {
@@ -98,6 +120,7 @@ export async function captureHeldShot(): Promise<HeldShot | null> {
       format: 'jpg',
       quality: 0.7,
       result: 'tmpfile',
+      ...blurCaptureOpts(),
     });
   } catch (e) {
     console.warn('vitrinka: annotate captureRef failed', e);
@@ -196,6 +219,7 @@ async function doShoot(reason: 'nav' | 'touch' | 'start'): Promise<void> {
       format: 'jpg',
       quality: 0.7,
       result: 'tmpfile',
+      ...blurCaptureOpts(),
     });
     // Allocate the seq only while the ORIGIN session is still current.
     if (!isSessionLive(origin)) return void discardTmp(tmpUri);

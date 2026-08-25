@@ -14,7 +14,7 @@
 import { isVitrinkaUrl } from '../api';
 import { getState, pushEvent, trackCapture } from '../queue';
 import { currentRoute } from '../state';
-import { redactAndCap, redactText } from './redact';
+import { redactAndCap, redactHeaders, redactUrl } from './redact';
 
 const BODY_CAP = 64 * 1024;
 /**
@@ -74,9 +74,68 @@ function init0(input: RequestInfo | URL): object {
 }
 
 function recordNet(payload: Record<string, unknown>): void {
-  // Query strings carry secrets too (?token=…, ?otp=…) — redact the URL centrally.
-  const url = typeof payload.url === 'string' ? redactText(payload.url) : payload.url;
+  // Query strings carry secrets too (?token=…, ?otp=…) — redact the URL
+  // centrally, with the engine's dedicated URL scrub (query AND fragment,
+  // split on both `&` and `;`).
+  const url = typeof payload.url === 'string' ? redactUrl(payload.url) : payload.url;
   pushEvent('net', { ...payload, url }, { ...currentRoute });
+}
+
+/**
+ * Normalize any HeadersInit shape (Headers, pair array, plain record) into a
+ * plain object for the redaction engine. Returns undefined when there is
+ * nothing to record; never throws — header capture must not break a request.
+ */
+function headersToObject(h: unknown): Record<string, string> | undefined {
+  if (!h) return undefined;
+  try {
+    const out: Record<string, string> = {};
+    const headers = h as {
+      forEach?: (cb: (value: string, key: string) => void) => void;
+    };
+    if (typeof headers.forEach === 'function') {
+      // Headers instance (also covers Maps and arrays via their forEach shapes
+      // differing — arrays are handled below instead).
+      if (Array.isArray(h)) {
+        for (const pair of h as [string, string][]) {
+          if (Array.isArray(pair) && pair.length >= 2) out[String(pair[0])] = String(pair[1]);
+        }
+      } else {
+        headers.forEach((value, key) => {
+          out[key] = String(value);
+        });
+      }
+    } else if (typeof h === 'object') {
+      for (const [k, v] of Object.entries(h as Record<string, unknown>)) {
+        out[k] = String(v);
+      }
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Redacted+capped request headers for a fetch call (init wins over Request). */
+function fetchReqHeaders(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Record<string, string> | undefined {
+  const fromInit = headersToObject(init?.headers);
+  if (fromInit) return redactHeaders(fromInit);
+  const obj = init0(input) as { headers?: unknown };
+  return redactHeaders(headersToObject(obj.headers));
+}
+
+/** Parse XHR's getAllResponseHeaders() CRLF block into a plain object. */
+function parseRawHeaders(raw: string | null): Record<string, string> | undefined {
+  if (!raw) return undefined;
+  const out: Record<string, string> = {};
+  for (const line of raw.split(/\r?\n/)) {
+    const i = line.indexOf(':');
+    if (i > 0) out[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /**
@@ -226,6 +285,13 @@ export function __readBoundedTextForTests(clone: Response, headers: Headers) {
  */
 const PATCH_MARK = '__vitrinkaRecorderNetPatched';
 
+/** Per-XHR capture metadata, stashed on the instance between open() and loadend. */
+interface VtMeta {
+  method: string;
+  url: string;
+  reqHeaders?: Record<string, string>;
+}
+
 export function patchNetwork(): void {
   const g = globalThis as typeof globalThis & { [PATCH_MARK]?: boolean };
   if (g[PATCH_MARK]) return;
@@ -270,6 +336,8 @@ export function patchNetwork(): void {
             url,
             status,
             ms,
+            reqHeaders: fetchReqHeaders(input, init),
+            resHeaders: redactHeaders(headersToObject(headers)),
             reqBody: capBody(init?.body),
             resBody,
             via: 'fetch',
@@ -293,22 +361,33 @@ export function patchNetwork(): void {
   const origOpen = XHR.prototype.open;
   const origSend = XHR.prototype.send;
 
+  const origSetHeader = XHR.prototype.setRequestHeader;
+
   XHR.prototype.open = function (
     this: XMLHttpRequest,
     ...args: Parameters<XMLHttpRequest['open']>
   ) {
-    (this as XMLHttpRequest & { __vt?: { method: string; url: string } }).__vt = {
+    (this as XMLHttpRequest & { __vt?: VtMeta }).__vt = {
       method: args[0],
       url: String(args[1]),
     };
     return origOpen.apply(this, args);
   };
 
+  // Request headers are only observable at the call site — record them as the
+  // app sets them (redaction happens at event build, against the live rules).
+  // The original may be absent on a stubbed XHR; observing must survive that.
+  XHR.prototype.setRequestHeader = function (this: XMLHttpRequest, name: string, value: string) {
+    const meta = (this as XMLHttpRequest & { __vt?: VtMeta }).__vt;
+    if (meta) (meta.reqHeaders ??= {})[name] = value;
+    return origSetHeader?.call(this, name, value);
+  };
+
   XHR.prototype.send = function (
     this: XMLHttpRequest,
     body?: Parameters<XMLHttpRequest['send']>[0],
   ) {
-    const meta = (this as XMLHttpRequest & { __vt?: { method: string; url: string } }).__vt;
+    const meta = (this as XMLHttpRequest & { __vt?: VtMeta }).__vt;
     const origin = activeSessionId();
     if (meta && !isVitrinkaUrl(meta.url) && origin !== null) {
       const started = Date.now();
@@ -327,11 +406,19 @@ export function patchNetwork(): void {
         } catch {
           resBody = undefined;
         }
+        let resHeaders: Record<string, string> | undefined;
+        try {
+          resHeaders = redactHeaders(parseRawHeaders(this.getAllResponseHeaders()));
+        } catch {
+          resHeaders = undefined;
+        }
         recordNet({
           method: meta.method,
           url: meta.url,
           status: this.status,
           ms: Date.now() - started,
+          reqHeaders: redactHeaders(meta.reqHeaders),
+          resHeaders,
           reqBody: capBody(body),
           resBody,
           via: 'xhr',

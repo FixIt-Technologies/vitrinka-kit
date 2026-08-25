@@ -17,7 +17,8 @@ import Constants from 'expo-constants';
 import { PixelRatio, Platform } from 'react-native';
 
 import type { SessionDone } from '../protocol';
-import { api, permanentStatus, VitrinkaApiError } from './api';
+import { api, fetchPolicy, permanentStatus, VitrinkaApiError } from './api';
+import { setRedactionPolicy } from './capture/redact';
 import type { HeldShot } from './capture/shot';
 import {
   armReconcile,
@@ -101,6 +102,11 @@ export interface StartOptions {
 }
 
 export async function startSession(opts: StartOptions = {}): Promise<SessionState> {
+  // The safe defaults apply from the first captured byte; the workspace
+  // policy (fetched in parallel with the create — fetchPolicy never rejects)
+  // can only ADD rules or, self-host only, fullFidelity.
+  setRedactionPolicy(null);
+  const policyPromise = fetchPolicy();
   const ses = await api<{
     id: string;
     project: string;
@@ -119,11 +125,14 @@ export async function startSession(opts: StartOptions = {}): Promise<SessionStat
       ...(opts.driver ? { driver: opts.driver } : {}),
     },
   });
+  const policy = await policyPromise;
+  setRedactionPolicy(policy);
   setState({
     sessionId: ses.id,
     project: ses.project,
     environment: ses.environment,
     title: ses.title,
+    policy,
     seq: 0,
     paused: false,
     activeMs: 0,
@@ -316,6 +325,7 @@ export async function stopSession(): Promise<SessionDone | null> {
   const completeDeadStop = async (reason: string | undefined): Promise<never> => {
     const kept = queuedCount();
     setState(null);
+    setRedactionPolicy(null);
     await resetQueues();
     notify();
     throw new Error(
@@ -372,6 +382,7 @@ export async function stopSession(): Promise<SessionDone | null> {
     }
   }
   setState(null);
+  setRedactionPolicy(null);
   await resetQueues();
   notify();
   return done;

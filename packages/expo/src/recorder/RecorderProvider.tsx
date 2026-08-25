@@ -19,6 +19,7 @@ import { AppState, type GestureResponderEvent, View } from 'react-native';
 import { patchConsole } from './capture/console';
 import { patchNetwork } from './capture/net';
 import { pressLabel } from './capture/press';
+import { setRedactionPolicy } from './capture/redact';
 import { setShotRoot, shoot } from './capture/shot';
 import { useRecorderControl } from './control';
 import {
@@ -70,7 +71,13 @@ export function RecorderProvider({
     // recording recovered from storage also needs its reconcile poll re-armed
     // (intervals do not survive a JS reload).
     scheduleFlush();
-    if (getState()) armReconcile();
+    const recovered = getState();
+    if (recovered) {
+      // A JS reload dropped the in-memory rule set — re-apply the session's
+      // policy (undefined/null = the safe defaults) before anything captures.
+      setRedactionPolicy(recovered.policy ?? null);
+      armReconcile();
+    }
     // A recovered recording also lost its idle timer. This recovery belongs
     // to the recorder lifecycle, including Release builds without Metro.
     armIdleStop();

@@ -40,6 +40,25 @@ export function isVitrinkaUrl(url: string): boolean {
 // assert against the SHIPPED rule; re-exported here so callers keep one import.
 export { permanentStatus, VitrinkaApiError } from './api-status';
 
+/**
+ * Fetch the workspace redaction policy at session start. NEVER rejects: null
+ * (server too old, network down, 4xx) means the engine's safe defaults — fail
+ * closed, never capture-everything. Full fidelity only ever arrives as an
+ * explicit server-approved flag inside a successfully fetched policy.
+ */
+export async function fetchPolicy(): Promise<import('@vitrinka/redact').RedactionPolicy | null> {
+  try {
+    const res = await api<{ policy?: import('@vitrinka/redact').RedactionPolicy }>(
+      'GET',
+      '/api/v1/recorder/policy',
+    );
+    return res.policy ?? null;
+  } catch (e) {
+    console.warn('vitrinka: redaction policy fetch failed — using safe defaults', e);
+    return null;
+  }
+}
+
 export async function api<T = Record<string, unknown>>(
   method: string,
   path: string,

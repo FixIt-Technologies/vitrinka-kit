@@ -21,8 +21,11 @@ const uploads: string[] = [];
 const deleted: string[] = [];
 let failUploads = false;
 
+const captureOpts: Record<string, unknown>[] = [];
+
 mock.module('react-native-view-shot', () => ({
-  captureRef: async () => {
+  captureRef: async (_ref: unknown, opts?: Record<string, unknown>) => {
+    captureOpts.push(opts ?? {});
     await captureGate;
     return '/tmp/shot.jpg';
   },
@@ -45,6 +48,7 @@ const apiStatus = (await import(
 )) as typeof import('../api-status');
 
 mock.module('../api', () => ({
+  fetchPolicy: async () => null,
   api: async () => ({}),
   uploadShot: async (sessionId: string) => {
     if (failUploads) throw new apiStatus.VitrinkaApiError('offline', 0);
@@ -63,6 +67,9 @@ const queue = (await import(
 const shot = (await import(
   '../capture/shot'
 )) as typeof import('../capture/shot');
+const redact = (await import(
+  '../capture/redact'
+)) as typeof import('../capture/redact');
 
 function session(id: string) {
   return {
@@ -219,5 +226,38 @@ describe('held keyframes (annotate flow)', () => {
     await queue.capturesSettled();
     expect(uploads).toEqual(['sess-A']);
     expect(queue.__bufferForTests().filter((e) => e.kind === 'shot')).toHaveLength(1);
+  });
+});
+
+describe('pixel masking (maskAllText ⇒ blurred keyframes)', () => {
+  beforeEach(() => {
+    captureOpts.length = 0;
+  });
+
+  it('captures at full size under the default policy', async () => {
+    redact.setRedactionPolicy(null);
+    await shot.shoot('nav');
+    await queue.capturesSettled();
+    expect(captureOpts).toHaveLength(1);
+    expect(captureOpts[0]?.width).toBeUndefined();
+  });
+
+  it('downscales the capture until text is unreadable under maskAllText', async () => {
+    redact.setRedactionPolicy({ maskAllText: true });
+    await shot.shoot('nav');
+    await queue.capturesSettled();
+    expect(captureOpts).toHaveLength(1);
+    expect(captureOpts[0]?.width).toBe(96);
+    // Aspect follows the (mocked 390×844) window.
+    expect(captureOpts[0]?.height).toBe(Math.round(96 * (844 / 390)));
+    redact.setRedactionPolicy(null);
+  });
+
+  it('fullFidelity restores full-size captures even with maskAllText set', async () => {
+    redact.setRedactionPolicy({ maskAllText: true, fullFidelity: true });
+    await shot.shoot('nav');
+    await queue.capturesSettled();
+    expect(captureOpts[0]?.width).toBeUndefined();
+    redact.setRedactionPolicy(null);
   });
 });

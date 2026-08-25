@@ -67,6 +67,9 @@
       "typescript"
     ]
   },
+  "dependencies": {
+    "@vitrinka/redact": "^0.1.0"
+  },
   "peerDependencies": {
     "expo": ">=54",
     "expo-constants": "*",
