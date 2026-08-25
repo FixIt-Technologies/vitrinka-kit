@@ -95,6 +95,11 @@
           }
           rrRec(opts);
         } catch (e) { console.warn("vitrinka: rrweb failed to start", e); }
+      }).catch(() => {
+        // The message channel itself failed — start anyway, fully masked.
+        try {
+          rrRec({ emit: (ev) => rrBuf.push(ev), inlineImages: true, collectFonts: true, maskAllInputs: true });
+        } catch (e) { console.warn("vitrinka: rrweb failed to start", e); }
       });
     }
   } catch (e) { console.warn("vitrinka: rrweb failed to start", e); }

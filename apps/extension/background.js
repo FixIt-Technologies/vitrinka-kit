@@ -654,18 +654,25 @@ chrome.debugger.onEvent.addListener(async (source, method, params) => {
   }
   const tab = rec.tabs[String(source.tabId)];
   if (!tab) return;
+  // Console/exception text is the classic secret side-channel: an app's
+  // fetch wrapper logging `login failed <url>?access_token=… {"refresh_token"…}`
+  // would bypass the body/URL scrubs entirely — run the engine's text pass
+  // (URL params, auth headers, JWTs, key=value pairs) before buffering, the
+  // same as the Expo client's console capture.
   if (method === "Runtime.consoleAPICalled" && params.type === "error") {
+    const raw = (params.args || []).map((a) => a.value ?? a.description ?? "").join(" ");
     await pushEvents([{ tabId: tab.id, tabHost: tab.host, kind: "console", payload: {
       level: "error",
-      text: (params.args || []).map((a) => a.value ?? a.description ?? "").join(" ").slice(0, 500),
+      text: (vtRedact.redactText(rulesOf(rec), raw) || "").slice(0, 500),
     } }]);
     return;
   }
   if (method === "Runtime.exceptionThrown") {
     const d = params.exceptionDetails || {};
+    const raw = (d.exception && (d.exception.description || d.exception.value)) || d.text || "uncaught exception";
     await pushEvents([{ tabId: tab.id, tabHost: tab.host, kind: "console", payload: {
       level: "error",
-      text: (d.exception && (d.exception.description || d.exception.value) || d.text || "uncaught exception").slice(0, 500),
+      text: (vtRedact.redactText(rulesOf(rec), String(raw)) || "").slice(0, 500),
     } }]);
     return;
   }
@@ -798,7 +805,24 @@ async function shoot(tabId, payload) {
   // Native Blob into the queue — no base64 dataURL sitting on disk (D7).
   // The encode below is an await, so the item is filed under the session the
   // seq came from, never whatever is live once it finishes.
-  const blob = await (await fetch(dataURL)).blob();
+  let blob = await (await fetch(dataURL)).blob();
+  // Pixel masking (maskAllText ⇒ blur): screenshots carry real rendered
+  // text — downscale until text is unreadable while layout survives,
+  // mirroring the Expo client's blurred keyframes. FAIL CLOSED: if the
+  // downscale fails, a masked workspace gets no frame rather than raw pixels.
+  if (vtRedact.pixelPolicy(rulesOf(rec)) === "blur") {
+    try {
+      const bmp = await createImageBitmap(blob);
+      const w = 96, h = Math.max(1, Math.round((bmp.height / bmp.width) * w));
+      const cv = new OffscreenCanvas(w, h);
+      cv.getContext("2d").drawImage(bmp, 0, 0, w, h);
+      blob = await cv.convertToBlob({ type: "image/jpeg", quality: 0.7 });
+      bmp.close();
+    } catch (e) {
+      console.warn("vitrinka: shot blur failed — frame dropped (maskAllText)", String(e));
+      return;
+    }
+  }
   await enqueue({
     sessionId: alloc.sessionId, seq: alloc.seq,
     ts: new Date().toISOString(), tabId: tab.id, tabHost: tab.host,
@@ -1270,7 +1294,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     switch (msg.type) {
       case "vt-click":
         if (tab) {
-          await pushEvents([{ tabId: tab.id, tabHost: tab.host, kind: "click", payload: msg.payload }]);
+          // The clicked element's label can BE the secret: for an <input>,
+          // innerText is "" so the content script sends el.value — a click
+          // on a filled password/token field would store it verbatim while
+          // rrweb masks the same pixels. Same engine pass the Expo client's
+          // press labels get (press.ts → redactText).
+          const rec = await getState();
+          const payload = { ...msg.payload, text: vtRedact.redactText(rulesOf(rec), msg.payload.text || "") };
+          await pushEvents([{ tabId: tab.id, tabHost: tab.host, kind: "click", payload }]);
           await shoot(sender.tab.id, { route: msg.route, title: sender.tab.title, url: sender.tab.url });
         }
         return sendResponse({ ok: true });
