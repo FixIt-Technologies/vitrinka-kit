@@ -14,7 +14,7 @@
  *   on a dead session completes locally instead of draining into a void.
  */
 import Constants from 'expo-constants';
-import { PixelRatio, Platform } from 'react-native';
+import { Platform } from 'react-native';
 
 import type { SessionDone } from '../protocol';
 import { api, fetchPolicy, permanentStatus, VitrinkaApiError } from './api';
@@ -125,14 +125,22 @@ export async function startSession(opts: StartOptions = {}): Promise<SessionStat
       ...(opts.driver ? { driver: opts.driver } : {}),
     },
   });
-  const policy = await policyPromise;
-  setRedactionPolicy(policy);
+  // NEVER await the policy here (spec: capture starts under the safe defaults
+  // and the policy applies when it lands) — a stalled policy endpoint must not
+  // leave the session unstarted and the server row orphaned. The .then cannot
+  // fire before the setState below (no await separates them), and it applies
+  // only while THIS session is still current.
+  void policyPromise.then((policy) => {
+    const rec = getState();
+    if (rec?.sessionId !== ses.id) return;
+    setRedactionPolicy(policy);
+    setState({ ...rec, policy });
+  });
   setState({
     sessionId: ses.id,
     project: ses.project,
     environment: ses.environment,
     title: ses.title,
-    policy,
     seq: 0,
     paused: false,
     activeMs: 0,
@@ -285,12 +293,16 @@ export function cornersToRect(ax: number, ay: number, bx: number, by: number): V
  * Emit a region annotation: the extension-shaped annotate-note
  * ({text, rect, annotate:true} — vitrinka's projection turns it into a real
  * board annotation region) followed by the frame frozen at drag-release.
- * The rect is scaled to the shot image's pixel space (captureRef captures at
- * screen density, so image px = view pt × PixelRatio). An empty note is still
- * a valid annotation, matching the extension.
+ * The rect is scaled to the shot image's pixel space using the held frame's
+ * OWN capture scale (screen density normally; the blur downscale under a
+ * maskAllText policy). An empty note is still a valid annotation, matching
+ * the extension.
  */
 export function addAnnotation(text: string, rect: ViewRect, held: HeldShot): void {
-  const s = PixelRatio.get();
+  // The HELD FRAME's own capture scale, not the screen density: a blurred
+  // keyframe (maskAllText) is only ~96px wide, and density-scaled rects would
+  // land far outside it.
+  const s = held.scale;
   const px = {
     x: Math.round(rect.x * s),
     y: Math.round(rect.y * s),

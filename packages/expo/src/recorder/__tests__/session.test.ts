@@ -66,11 +66,13 @@ const apiStatus = (await import(
 
 // Scripted workspace policy for the fetchPolicy mock (null = fetch failed /
 // server too old ⇒ the engine's safe defaults).
-let policyScript: import('@vitrinka/redact').RedactionPolicy | null = null;
+type PolicyResult = import('@vitrinka/redact').RedactionPolicy | null;
+let policyScript: PolicyResult | Promise<PolicyResult> = null;
 
 mock.module('../api', () => ({
   api,
-  fetchPolicy: async () => policyScript,
+  // Awaited so a test can hand it a pending Promise (slow-policy scenarios).
+  fetchPolicy: async () => await policyScript,
   uploadShot: async () => ({ blobKey: 'b1' }),
   permanentStatus: apiStatus.permanentStatus,
   VitrinkaApiError: apiStatus.VitrinkaApiError,
@@ -278,11 +280,12 @@ describe('pause bookkeeping', () => {
 });
 
 describe('addAnnotation (region annotate)', () => {
-  const heldMock = () => {
+  const heldMock = (scale = 2) => {
     const h = { commits: [] as string[], discards: 0 };
     return {
       h,
       held: {
+        scale,
         commit: (ts: string) => h.commits.push(ts),
         discard: () => h.discards++,
       },
@@ -302,6 +305,19 @@ describe('addAnnotation (region annotate)', () => {
     });
     expect(h.commits).toEqual([notes[0]?.ts]); // shot anchors to THIS note's ts
     expect(h.discards).toBe(0);
+  });
+
+  it('scales the rect by the HELD FRAME’s capture scale, not the screen density', () => {
+    // A blurred keyframe (maskAllText) is 96px wide — rects converted at
+    // PixelRatio would land far outside the image.
+    const { held } = heldMock(96 / 390);
+    session.addAnnotation('tiny', { x: 39, y: 78, w: 195, h: 390 }, held);
+    const notes = queue.__bufferForTests().filter((e) => e.kind === 'note');
+    expect(notes[0]?.payload).toEqual({
+      text: 'tiny',
+      rect: { x: 10, y: 19, w: 48, h: 96 },
+      annotate: true,
+    });
   });
 
   it('an empty note is still a valid annotation', () => {
@@ -365,6 +381,29 @@ describe('redaction policy at session start', () => {
     const rules = redact.currentRules();
     expect(rules.full).toBe(false);
     expect(redact.redactHeaders({ Authorization: 'Bearer x' })?.Authorization).toBe('[redacted]');
+  });
+
+  it('does NOT block session start on a slow policy fetch — defaults capture until it lands', async () => {
+    let release: (p: PolicyResult) => void = () => undefined;
+    policyScript = new Promise<PolicyResult>((res) => {
+      release = res;
+    });
+    try {
+      // startSession must resolve while the policy fetch is still pending —
+      // a stalled policy endpoint must never leave capture unstarted (and the
+      // server session orphaned). Defaults apply meanwhile.
+      const rec = await session.startSession();
+      expect(rec.sessionId).toBe('sess-new');
+      expect(redact.currentRules().maskAllText).toBe(false);
+      // The policy lands later and applies to the STILL-CURRENT session.
+      release({ maskAllText: true });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(redact.currentRules().maskAllText).toBe(true);
+      expect(queue.getState()?.policy).toEqual({ maskAllText: true });
+    } finally {
+      policyScript = null;
+      redact.setRedactionPolicy(null);
+    }
   });
 
   it('stopSession resets the active rules to the defaults', async () => {

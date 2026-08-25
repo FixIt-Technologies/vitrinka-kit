@@ -260,4 +260,20 @@ describe('pixel masking (maskAllText ⇒ blurred keyframes)', () => {
     expect(captureOpts[0]?.width).toBeUndefined();
     redact.setRedactionPolicy(null);
   });
+
+  it('a held keyframe carries its capture scale (image px per view pt)', async () => {
+    // Default: captureRef records at screen density — scale = PixelRatio (2 in
+    // the preload). Under blur the JPEG is only BLUR_WIDTH px wide, so the
+    // scale annotation rects must use is BLUR_WIDTH / window width — the
+    // full-density scale would land rects an order of magnitude outside the
+    // image.
+    const plain = await shot.captureHeldShot();
+    expect(plain?.scale).toBe(2);
+    plain?.discard();
+    redact.setRedactionPolicy({ maskAllText: true });
+    const blurred = await shot.captureHeldShot();
+    expect(blurred?.scale).toBeCloseTo(96 / 390, 5);
+    blurred?.discard();
+    redact.setRedactionPolicy(null);
+  });
 });
