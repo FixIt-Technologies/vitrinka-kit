@@ -639,25 +639,34 @@ function capHeaders(h, rec) {
 // fetchPolicy pulls the workspace redaction policy at session start. null
 // (server too old, network down, 4xx) = the engine's safe defaults — never
 // full fidelity, which only ever arrives as an explicit server-approved flag.
+// fetchPolicy resolves to THREE distinct states — never conflate them,
+// because the engine's DOM/pixel defaults are PERMISSIVE and resolving
+// "unknown" to them fails open:
+//   policy object / null  — the server ANSWERED (2xx, or a deliberate 4xx =
+//                           no policy / request refused): defaults are FINAL.
+//   undefined             — UNKNOWN (timeout, network error, 5xx): rec.policy
+//                           stays unset, waiters answer STRICT, shoot() keeps
+//                           dropping, and the reconcile poll retries.
+// BOUNDED (10s): a hung endpoint must not pin pendingPolicy — and with it
+// every vt-policy/shoot waiter — for the session's lifetime. (No extra
+// rejection guard needed: Promise.race subscribes to every input, so the
+// abandoned request's late rejection is always handled.)
 async function fetchPolicy() {
   try {
-    // BOUNDED: a hung endpoint must not pin pendingPolicy — and with it every
-    // vt-policy/shoot waiter — for the session's lifetime. A timeout counts
-    // as a completed-and-failed fetch (defaults become final), same contract
-    // as a network error.
-    const req = api("GET", "/api/v1/recorder/policy");
-    // The race may ABANDON req — a late rejection (4xx after the timeout won)
-    // must not surface as an unhandled rejection in the service worker.
-    req.catch(() => {});
     const res = await Promise.race([
-      req,
+      api("GET", "/api/v1/recorder/policy"),
       new Promise((_res, rej) =>
         setTimeout(() => rej(new Error("policy fetch timed out")), 10_000)),
     ]);
-    return res.policy || null;
+    return (res && res.policy) || null;
   } catch (e) {
-    console.warn("vitrinka: redaction policy fetch failed — using safe defaults", e);
-    return null;
+    const status = statusOf(e);
+    if (status >= 400 && status < 500) {
+      console.warn("vitrinka: no redaction policy (HTTP " + status + ") — using safe defaults", e);
+      return null;
+    }
+    console.warn("vitrinka: redaction policy fetch failed — strict masking until the retry lands", e);
+    return undefined;
   }
 }
 
@@ -684,6 +693,10 @@ function applyPolicyWhenFetched(policyPromise, sessionId, tabId) {
   // path on a perfectly healthy backend.
   const chain = policyPromise.then(async (policy) => {
     if (runSeq !== policyRunSeq) return; // a newer run superseded this fetch
+    // UNKNOWN outcome (timeout/network/5xx): let the chain settle — which
+    // unpins pendingPolicy so waiters stop hanging — but write NOTHING:
+    // rec.policy stays undefined, waiters stay strict, reconcile retries.
+    if (policy === undefined) return;
     const rec = await getState();
     if (!rec || rec.sessionId !== sessionId || rec.policy !== undefined) return;
     await setState({ ...rec, policy });
