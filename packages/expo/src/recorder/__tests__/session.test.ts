@@ -442,8 +442,10 @@ describe('redaction policy at session start', () => {
       releaseFirst({ maskAllText: true });
       await new Promise((r) => setTimeout(r, 0));
       expect(queue.getState()?.policy).toEqual({ maskAllText: true });
-      // A later recovery attempt resolving null (failed fetch) must not
-      // downgrade the settled policy back to defaults.
+      // A later recovery ATTEMPT after the policy settled short-circuits on
+      // the early `rec.policy !== undefined` return (the in-flight settled
+      // guard is exercised by the audit's mid-flight-settle scenario) — either
+      // way a null resolution can no longer downgrade the settled policy.
       policyScript = null;
       session.recoverRedactionPolicy();
       await new Promise((r) => setTimeout(r, 0));
