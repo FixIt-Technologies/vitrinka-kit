@@ -705,9 +705,17 @@ function applyPolicyWhenFetched(policyPromise, sessionId, tabId) {
     // unpins pendingPolicy so waiters stop hanging — but write NOTHING:
     // rec.policy stays undefined, waiters stay strict, reconcile retries.
     if (policy === undefined) return;
-    const rec = await getState();
-    if (!rec || rec.sessionId !== sessionId || rec.policy !== undefined) return;
-    await setState({ ...rec, policy });
+    // The read-modify-write rides withLock like every other state writer —
+    // an unserialized apply could interleave with attachTab/pushEvents,
+    // whose stale rec (policy still undefined) would commit AFTER this write
+    // and erase the fetched policy.
+    const rec = await withLock(async () => {
+      const live = await getState();
+      if (!live || live.sessionId !== sessionId || live.policy !== undefined) return null;
+      await setState({ ...live, policy });
+      return live;
+    });
+    if (!rec) return;
     // Push to the explicit tab AND every attached tab — the reconcile retry
     // has no single "active" tab, and surviving instances all need the flip.
     const pixel = vtRedact.pixelPolicy(vtRedact.compileRules(policy || null));
