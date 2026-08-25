@@ -457,6 +457,18 @@ async function markSessionDead(reason) {
 async function reconcile() {
   const rec = await getState();
   if (!rec) return null;
+  // A SW death between session start and the policy fetch landing leaves
+  // rec.policy undefined forever (the promise died with the worker) — the
+  // reconcile poll is the natural retry heartbeat. undefined strictly means
+  // "no answer yet"; a completed-but-failed fetch stored null (defaults are
+  // then final). Single-flight so overlapping polls don't stack fetches.
+  if (rec.policy === undefined && !policyRefetchInFlight) {
+    policyRefetchInFlight = true;
+    applyPolicyWhenFetched(
+      fetchPolicy().finally(() => { policyRefetchInFlight = false; }),
+      rec.sessionId, null,
+    );
+  }
   let ses;
   try {
     ses = await api("GET", `/api/v1/sessions/${rec.sessionId}`);
@@ -633,6 +645,26 @@ async function fetchPolicy() {
   }
 }
 
+// applyPolicyWhenFetched patches the fetched policy into rec once it lands —
+// only while the SAME session is live and no answer settled meanwhile — then
+// pushes the pixel policy to the attached tab (a surviving content-script
+// instance keeps module state across sessions). Never blocks session start
+// (REDACTION-SPEC "Fail closed": defaults capture until the policy lands).
+let policyRefetchInFlight = false;
+function applyPolicyWhenFetched(policyPromise, sessionId, tabId) {
+  policyPromise.then(async (policy) => {
+    const rec = await getState();
+    if (!rec || rec.sessionId !== sessionId || rec.policy !== undefined) return;
+    await setState({ ...rec, policy });
+    if (tabId != null) {
+      chrome.tabs.sendMessage(tabId, {
+        type: "vt-policy-push",
+        pixel: vtRedact.pixelPolicy(vtRedact.compileRules(policy || null)),
+      }).catch(() => {});
+    }
+  }).catch(() => {});
+}
+
 chrome.debugger.onEvent.addListener(async (source, method, params) => {
   // Target attachment is LIFECYCLE, not capture — it must run even while
   // paused, or a worker spawned mid-pause records nothing after resume.
@@ -697,6 +729,9 @@ chrome.debugger.onEvent.addListener(async (source, method, params) => {
     const f = inflight.get(key);
     if (f) {
       f.status = params.response.status; f.mime = params.response.mimeType; f.type = params.type;
+      // The FULL Content-Type, boundary included — mimeType alone strips the
+      // parameters, and multipart redaction dispatches on the boundary.
+      f.resCT = headerCT(params.response.headers);
       f.resHeaders = capHeaders(params.response.headers, rec);
     }
   } else if (method === "Network.loadingFinished" || method === "Network.loadingFailed") {
@@ -714,7 +749,7 @@ chrome.debugger.onEvent.addListener(async (source, method, params) => {
       try {
         const target = f.sessionId ? { tabId: source.tabId, sessionId: f.sessionId } : { tabId: source.tabId };
         const b = await chrome.debugger.sendCommand(target, "Network.getResponseBody", { requestId: params.requestId });
-        resBody = redactBodyCapped(rec, b.base64Encoded ? "" : b.body || "", f.mime || "");
+        resBody = redactBodyCapped(rec, b.base64Encoded ? "" : b.body || "", f.resCT || f.mime || "");
       } catch { /* body already gone — metadata still lands */ }
     }
     await pushEvents([{
@@ -848,16 +883,20 @@ async function startSession(title) {
   const ses = await api("POST", "/api/v1/sessions", {
     host, title: title || "", meta: { userAgent: navigator.userAgent, recorder: "extension/" + chrome.runtime.getManifest().version },
   });
-  // The workspace redaction policy rides in rec so every SW wake has it
-  // without a network round trip; a failed fetch means the safe defaults.
-  const policy = await fetchPolicy();
+  // NEVER await the policy before capture starts (REDACTION-SPEC "Fail
+  // closed"): a slow/hung policy endpoint must not block recording or orphan
+  // the just-created server session. Absent policy = the engine defaults
+  // (fail closed); applyPolicyWhenFetched patches rec when it lands and the
+  // reconcile poll retries if the SW died mid-fetch (rec.policy undefined).
+  const policyPromise = fetchPolicy();
   await setState({
-    sessionId: ses.id, project: ses.project, environment: ses.environment, policy,
+    sessionId: ses.id, project: ses.project, environment: ses.environment,
     title: ses.title, startedAt: ses.startedAt, seq: 0, paused: false, tabs: {},
     // Active-time bookkeeping: elapsed = activeMs + (now - resumeAt while
     // running). The HUD clock freezes on pause because of this, not luck.
     activeMs: 0, resumeAt: new Date().toISOString(),
   });
+  applyPolicyWhenFetched(policyPromise, ses.id, active.id);
   serverMaxSeq = 0;
   lastSyncAt = Date.now();
   failures = 0;
@@ -867,10 +906,6 @@ async function startSession(title) {
   // once the server confirms, and flush drops it on sight either way.
   await reapDeadSessions().catch(() => {});
   await attachTab(active.id, active.url);
-  // A SURVIVING content-script instance (re-injection no-ops) keeps module
-  // state from the previous session — push the fresh pixel policy so blurred
-  // workspaces get correctly scaled rects without a navigation.
-  chrome.tabs.sendMessage(active.id, { type: "vt-policy-push", pixel: vtRedact.pixelPolicy(vtRedact.compileRules(policy || null)) }).catch(() => {});
   await shoot(active.id, { route: routeOf(active.url), title: active.title, url: active.url });
   await badge("rec");
   armReconcile();
@@ -884,9 +919,11 @@ async function startSession(title) {
 async function continueSession(sessionId) {
   const ses = await api("GET", `/api/v1/sessions/${sessionId}`);
   await api("PATCH", `/api/v1/sessions/${sessionId}`, { status: "recording" });
-  const policy = await fetchPolicy();
+  // Same non-blocking policy contract as startSession — never gate resume on
+  // a slow policy endpoint; defaults capture until it lands.
+  const policyPromise = fetchPolicy();
   await setState({
-    sessionId: ses.id, project: ses.project, environment: ses.environment, policy,
+    sessionId: ses.id, project: ses.project, environment: ses.environment,
     title: ses.title, startedAt: new Date().toISOString(), seq: ses.maxSeq || 0,
     paused: false, tabs: {}, activeMs: 0, resumeAt: new Date().toISOString(),
   });
@@ -897,12 +934,9 @@ async function continueSession(sessionId) {
   wrapping = null;
   await reapDeadSessions().catch(() => {});
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+  applyPolicyWhenFetched(policyPromise, ses.id, active ? active.id : null);
   if (active && /^https?:/.test(active.url || "")) {
     await attachTab(active.id, active.url);
-    // A SURVIVING content-script instance (re-injection no-ops) keeps module
-    // state from the previous session — push the fresh pixel policy so blurred
-    // workspaces get correctly scaled rects without a navigation.
-    chrome.tabs.sendMessage(active.id, { type: "vt-policy-push", pixel: vtRedact.pixelPolicy(vtRedact.compileRules(policy || null)) }).catch(() => {});
     await shoot(active.id, { route: routeOf(active.url), title: active.title, url: active.url });
   }
   await badge("rec");
