@@ -75,8 +75,9 @@ the built-in defaults above apply — **never** capture-everything. A
 serve it otherwise) restores unredacted capture.
 
 Screenshots carry real rendered pixels and are not content-filtered by
-default. Under a `maskAllText` policy the Expo recorder captures keyframes at
-a strongly reduced resolution (text unreadable, layout visible). Otherwise:
+default. Under a `maskAllText` policy BOTH recorders capture keyframes at a
+strongly reduced resolution (text unreadable, layout visible; the extension
+drops a frame it cannot downscale rather than storing it raw). Otherwise:
 do not record against screens showing data you would not put on the
 session's board.
 
