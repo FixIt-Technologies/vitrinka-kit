@@ -645,8 +645,12 @@ async function fetchPolicy() {
     // vt-policy/shoot waiter — for the session's lifetime. A timeout counts
     // as a completed-and-failed fetch (defaults become final), same contract
     // as a network error.
+    const req = api("GET", "/api/v1/recorder/policy");
+    // The race may ABANDON req — a late rejection (4xx after the timeout won)
+    // must not surface as an unhandled rejection in the service worker.
+    req.catch(() => {});
     const res = await Promise.race([
-      api("GET", "/api/v1/recorder/policy"),
+      req,
       new Promise((_res, rej) =>
         setTimeout(() => rej(new Error("policy fetch timed out")), 10_000)),
     ]);
