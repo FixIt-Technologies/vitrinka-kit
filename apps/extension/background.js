@@ -462,7 +462,10 @@ async function reconcile() {
   // reconcile poll is the natural retry heartbeat. undefined strictly means
   // "no answer yet"; a completed-but-failed fetch stored null (defaults are
   // then final). Single-flight so overlapping polls don't stack fetches.
-  if (rec.policy === undefined && !policyRefetchInFlight) {
+  if (rec.policy === undefined && !policyRefetchInFlight && !pendingPolicy) {
+    // !pendingPolicy: the start-path fetch may still be in flight — starting
+    // a second fetch would bump policyRunSeq and discard the first apply
+    // (converges, but wastefully).
     policyRefetchInFlight = true;
     applyPolicyWhenFetched(
       fetchPolicy().finally(() => { policyRefetchInFlight = false; }),
@@ -661,8 +664,12 @@ let pendingPolicy = null;
 let policyRunSeq = 0;
 function applyPolicyWhenFetched(policyPromise, sessionId, tabId) {
   const runSeq = ++policyRunSeq;
-  pendingPolicy = policyPromise;
-  policyPromise.then(async (policy) => {
+  // pendingPolicy holds the WHOLE CHAIN (fetch + the setState that persists
+  // it), never the raw fetch promise: a waiter racing the raw promise would
+  // resume and re-read storage BEFORE the apply's write committed, observe
+  // policy === undefined on a fetch that just succeeded, and take the strict
+  // path on a perfectly healthy backend.
+  const chain = policyPromise.then(async (policy) => {
     if (runSeq !== policyRunSeq) return; // a newer run superseded this fetch
     const rec = await getState();
     if (!rec || rec.sessionId !== sessionId || rec.policy !== undefined) return;
@@ -675,8 +682,10 @@ function applyPolicyWhenFetched(policyPromise, sessionId, tabId) {
     for (const id of ids) {
       chrome.tabs.sendMessage(id, { type: "vt-policy-push", pixel }).catch(() => {});
     }
-  }).catch(() => {}).finally(() => {
-    if (pendingPolicy === policyPromise) pendingPolicy = null;
+  }).catch(() => {});
+  pendingPolicy = chain;
+  chain.finally(() => {
+    if (pendingPolicy === chain) pendingPolicy = null;
   });
 }
 
@@ -1459,9 +1468,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // PERMISSIVE side (maskAllText TIGHTENS) — answering from an
         // unsettled state would start rrweb unmasked in a masked workspace,
         // permanently (rrweb configures once). Wait bounded for the in-flight
-        // fetch; if still unsettled, answer STRICT (mask everything, blur):
-        // over-masking a normal workspace briefly beats un-masking a masked
-        // one for the whole session.
+        // fetch+apply chain; if STILL unsettled — which after the chain fix
+        // means a genuinely hung/dead policy endpoint — answer STRICT (mask
+        // everything, blur). That over-masks THAT session's whole DOM stream
+        // (rrweb never reconfigures), which is the safe direction; a healthy
+        // backend settles inside the wait and never takes this branch.
         let rec = await getState();
         if (rec && rec.policy === undefined) {
           rec = await awaitPolicySettled(2000);
