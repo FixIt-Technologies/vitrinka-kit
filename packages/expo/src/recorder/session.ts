@@ -92,17 +92,24 @@ export function recoverRedactionPolicy(): void {
   // EARLIER success with null.
   if (policyRecoveryInFlight) return;
   policyRecoveryInFlight = true;
-  void fetchPolicy().then((policy) => {
-    policyRecoveryInFlight = false;
-    const live = getState();
-    if (live?.sessionId !== rec.sessionId) return;
-    // Settled-policy guard, same reason as the single-flight: once ANY path
-    // recorded a final answer (fetched policy, or startSession's own apply),
-    // a late recovery response must not clobber it.
-    if (live.policy !== undefined) return;
-    setRedactionPolicy(policy);
-    setState({ ...live, policy });
-  });
+  void fetchPolicy()
+    .then((policy) => {
+      const live = getState();
+      if (live?.sessionId !== rec.sessionId) return;
+      // Settled-policy guard, same reason as the single-flight: once ANY
+      // path recorded a final answer (fetched policy, or startSession's own
+      // apply), a late recovery response must not clobber it.
+      if (live.policy !== undefined) return;
+      setRedactionPolicy(policy);
+      setState({ ...live, policy });
+    })
+    .finally(() => {
+      // The reset lives in finally, NOT the then: fetchPolicy is contractually
+      // non-rejecting today, but that guarantee lives in another module — a
+      // future rejection must not leave the flag stuck true and recovery
+      // silently dead for the rest of the runtime.
+      policyRecoveryInFlight = false;
+    });
 }
 
 export function elapsedOf(rec: SessionState | null): number {

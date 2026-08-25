@@ -105,8 +105,10 @@ Dispatch on shape and declared content type:
    values (file parts included) get the free-text scan (a part value can be a
    header line, a bare JWT, or embedded JSON carrying sensitive keys);
    rebuild with the same boundary. If the body won't parse (truncated, no
-   boundary): free-text fallback over the whole body — never emit a
-   half-scrubbed reconstruction.
+   boundary): FAIL CLOSED — omit the body with a marker. Free-text scanning
+   cannot see multipart structure (a `name="password"` part's raw value sits
+   on its own line), so a partial scan would leak exactly the fields the key
+   scrub exists for.
 5. **Anything else**: free-text scanning (reference behavior, see below) and
    the extra patterns. At minimum the patterns must run.
 
@@ -127,6 +129,11 @@ A fully benign URL comes back **byte-identical** (no re-encoding churn).
 A benign-named parameter whose *decoded* value embeds a secret pair
 (`?next=%2Fcb%3Ftoken%3D…`) also loses its value (reference behavior;
 decoding for inspection fails closed, escape-by-escape, bounded double-decode).
+Hash-route fragments nest a query inside one pair (`#/reset?token=…` yields
+the key `/reset?token`): the part after the last `?` in a pair's key MUST be
+inspected as a name too, or set-matched keys (including policy extras) evade
+the scrub. Truncated-JSON fallback keys MUST be classified with JSON string
+escapes decoded (`pass\\u0077ord` ≡ `password`).
 
 ### Free text (reference engine; ports SHOULD follow)
 

@@ -135,12 +135,31 @@
       "mustNotContain": ["EXTRA-SECRET"]
     },
     {
-      "name": "truncated multipart falls back to pattern scrubbing, never a half-scrub",
+      "name": "truncated multipart FAILS CLOSED — the body is omitted, never half-scanned",
       "surface": "body",
-      "policy": { "patterns": ["MULTI-[A-Z]+"] },
       "contentType": "multipart/form-data; boundary=b123",
-      "input": "--b123\r\nContent-Disposition: form-data; name=\"password\"\r\n\r\nMULTI-SECRET\r\n--b123\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"a.png\"\r\nContent-Type: image/png\r\n\r\nPNGBYTES\r\n--b1",
-      "mustNotContain": ["MULTI-SECRET"]
+      "input": "--b123\r\nContent-Disposition: form-data; name=\"password\"\r\n\r\nTRUNC-SECRET\r\n--b123\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"a.png\"\r\nContent-Type: image/png\r\n\r\nPNGBYTES\r\n--b1",
+      "mustNotContain": ["TRUNC-SECRET", "PNGBYTES"]
+    },
+    {
+      "name": "hash-route fragment: nested query key is inspected (set-only key)",
+      "surface": "url",
+      "policy": { "extraBodyKeys": ["internalId"] },
+      "input": "https://app.example.com/#/reset?internal_id=NESTED-SECRET",
+      "mustNotContain": ["NESTED-SECRET"]
+    },
+    {
+      "name": "hash-route fragment: nested magic-link token is scrubbed",
+      "surface": "url",
+      "input": "https://app.example.com/#/reset?token=FRAG-ROUTE-SECRET",
+      "mustNotContain": ["FRAG-ROUTE-SECRET"]
+    },
+    {
+      "name": "truncated JSON: escaped key spellings cannot evade the fallback",
+      "surface": "body",
+      "contentType": "application/json",
+      "input": "{\"note\":\"x\",\"pass\\u0077ord\":\"ESCAPED-LEAK\",\"blob\":\"aaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mustNotContain": ["ESCAPED-LEAK"]
     },
     {
       "name": "form body: benign-keyed JWT credential is still text-scanned (CT path is a superset)",
