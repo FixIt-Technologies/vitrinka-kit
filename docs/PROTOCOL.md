@@ -59,6 +59,10 @@ conformance vectors in
   cap, and URL-encoded / double-encoded forms.
 - **URLs**: sensitive query AND fragment parameters are scrubbed
   (OAuth callbacks, magic links, SAS URLs), with `;`-separated pairs handled.
+- **Multipart uploads beyond the 64 KiB body cap record as an omission
+  marker**, not a partial body: a truncated multipart body cannot be parsed
+  into parts, and a partial scan would leak exactly the fields the key scrub
+  protects — the recorders fail closed instead.
 
 Both clients apply this engine — the Expo recorder imports it directly, the
 browser extension carries a generated copy (`vendor/redact.js`, kept in sync
