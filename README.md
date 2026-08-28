@@ -17,6 +17,29 @@ your device and what data it collects.
 | [`packages/expo`](packages/expo) | `@vitrinka/expo` — the Expo / React Native toolkit. Today: the journey recorder (`@vitrinka/expo/recorder`). |
 | [`apps/extension`](apps/extension) | The **Vitrinka Journey Recorder** Chrome extension — records manual-testing journeys from your browser. |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | What the recorders capture and where it is sent. |
+| [`skills/`](skills) | Agent skills for working with vitrinka — generated from the product repo, installable as the `vitrinka` plugin (Claude Code / Codex) or via the skills CLI. |
+
+## Quick start — agent skills
+
+The skills ship through the standard channels — pick yours:
+
+```bash
+# Claude Code
+claude plugin marketplace add FixIt-Technologies/vitrinka-kit
+claude plugin install vitrinka@vitrinka
+
+# Codex
+codex plugin marketplace add FixIt-Technologies/vitrinka-kit
+codex plugin add vitrinka
+
+# Any skills-CLI agent (Cursor, Copilot, Windsurf, …)
+npx skills add FixIt-Technologies/vitrinka-kit
+```
+
+The `vitrinka` CLI's `vitrinka install` / `vitrinka skills` drive the same
+mechanisms with a status table and a picker. This surface is **generated** —
+authored in the product repo and rendered here by its exporter; edits belong
+there, not in these files.
 
 ## Quick start — Expo recorder
 
