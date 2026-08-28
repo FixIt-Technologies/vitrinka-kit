@@ -51,9 +51,10 @@ You supply **meaning**; the kit owns **every visual decision** — palette, type
    (`push --source <project/branchSlug/key>` sets the screenshot-set cross-link when the scaffold didn't record it; a successful push persists `--source`/`--title` into `.vitrinka` for later plain pushes.)
 5. **Verify with `curl`, never a browser** — the push already proves the sync:
    ```bash
-   curl -s -o /tmp/art.html -w '%{http_code} %{size_download}\n' \
-     -H "Authorization: Bearer $(vitrinka token)" <printed-url>/raw/index.html
+   printf 'Authorization: Bearer %s' "$(vitrinka token)" | curl -s -H @- \
+     -o /tmp/art.html -w '%{http_code} %{size_download}\n' <printed-url>/raw/index.html
    ```
+   (header via stdin — the token never lands in argv/process lists)
    `200` + a plausible byte count = done. **The link goes in your final summary, always.** Do NOT drive Playwright/Chrome to "check it renders" — the viewer is login-gated; a fresh browser context shows the login wall.
 6. **Iterate = edit `doc.json` + push again.** Same key → same URL, updated live.
 

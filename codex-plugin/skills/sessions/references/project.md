@@ -44,7 +44,7 @@ rest, confirm, commit. Re-map on demand when the repo's tooling changes.
     }
   },
   "frameworks": [
-    { "surface": "web", "runner": "playwright", "hosts": ["*.fixit.dev.lovinka.com"] },
+    { "surface": "web", "runner": "playwright", "hosts": ["*.staging.example.com"] },
     { "surface": "expo", "runner": "appium", "apps": ["com.fixit.app"] }
   ],
   "notes": "anything a future run must know (env quirks, seed commands, ports)"

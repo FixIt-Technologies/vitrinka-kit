@@ -8,7 +8,7 @@
   },
   "homepage": "https://vitrinka.ai",
   "repository": "https://github.com/LEFTEQ/vitrinka",
-  "license": "MIT",
+  "license": "Elastic-2.0",
   "keywords": [
     "screenshots",
     "annotation-board",
@@ -18,11 +18,10 @@
     "mcp"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Vitrinka",
     "shortDescription": "Capture UI journeys and publish review boards",
-    "longDescription": "Use Vitrinka to capture UI work, publish screenshot journeys and interactive artifacts, compose annotation boards, and process board work through its MCP server.",
+    "longDescription": "Use Vitrinka to capture UI work, publish screenshot journeys and interactive artifacts, compose annotation boards, and process board work through the vitrinka MCP server (registered separately by `vitrinka install`).",
     "developerName": "Vitrinka",
     "category": "Developer Tools",
     "capabilities": [
