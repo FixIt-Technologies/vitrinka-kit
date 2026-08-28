@@ -1,0 +1,20 @@
+{
+  "name": "vitrinka",
+  "displayName": "Vitrinka",
+  "description": "Screenshot journeys, annotation boards, and the AI expression layer — capture UI work as it's built, publish it to live boards, and work the annotation queue from any Claude Code session.",
+  "author": {
+    "name": "Lukáš Přibík",
+    "url": "https://github.com/LEFTEQ"
+  },
+  "homepage": "https://vitrinka.ai",
+  "repository": "https://github.com/LEFTEQ/vitrinka",
+  "license": "MIT",
+  "keywords": [
+    "screenshots",
+    "annotation-board",
+    "ui-review",
+    "journeys",
+    "qa",
+    "mcp"
+  ]
+}

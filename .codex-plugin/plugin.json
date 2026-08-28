@@ -1,0 +1,40 @@
+{
+  "name": "vitrinka",
+  "version": "1.9.0",
+  "description": "Capture UI journeys, publish interactive artifact and annotation boards, and work with Vitrinka through MCP.",
+  "author": {
+    "name": "Lukas Pribik",
+    "url": "https://github.com/LEFTEQ"
+  },
+  "homepage": "https://vitrinka.ai",
+  "repository": "https://github.com/LEFTEQ/vitrinka",
+  "license": "MIT",
+  "keywords": [
+    "screenshots",
+    "annotation-board",
+    "ui-review",
+    "journeys",
+    "qa",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Vitrinka",
+    "shortDescription": "Capture UI journeys and publish review boards",
+    "longDescription": "Use Vitrinka to capture UI work, publish screenshot journeys and interactive artifacts, compose annotation boards, and process board work through its MCP server.",
+    "developerName": "Vitrinka",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://vitrinka.ai",
+    "defaultPrompt": [
+      "Capture this UI flow and publish it to a Vitrinka board",
+      "Turn this analysis into a shareable Vitrinka artifact",
+      "Create a Vitrinka board for these design decisions"
+    ]
+  }
+}
