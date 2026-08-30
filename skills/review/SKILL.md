@@ -1,6 +1,8 @@
 ---
 name: review
 description: "Drive the AI-review loop on a board — request an eve pass, verify and fix the real findings in this repo, push a next-pass iteration, re-review. Invoke as /vitrinka:review [board-slug] [journey] FROM THE APP'S REPO; human annotations are listen (live) / resolve (backlog)."
+metadata:
+  vitrinka-contract: "2026-08-30"
 ---
 
 # /vitrinka:review — the AI-review loop

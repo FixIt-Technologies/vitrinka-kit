@@ -59,6 +59,11 @@ Field rules:
 - `ready` is either `{url}` (2xx = up) or `{log}` (line appears in the run
   output); always with `timeoutSec`. A stack without a readiness check WILL
   eventually eat a test run — refuse to leave it empty.
+- Run entries take two optional pair-mode keys (`vitrinka pair` reads them):
+  `"hot": true` marks an HMR/Metro stack where a file save reaches the running
+  app with no restart (so `pair restart` is a no-op for it), and `"url"` is
+  the human-facing address to hand the tester when it differs from
+  `ready.url`.
 - `frameworks[].hosts`/`apps` mirror the server-side project domain/app rules
   (project settings) — the mapping between what a session recorded and which
   runner tests it.

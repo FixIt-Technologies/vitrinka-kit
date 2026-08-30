@@ -1,6 +1,8 @@
 ---
 name: brainstorming
 description: "You MUST use this before any creative work - creating features, building components, adding functionality, or modifying behavior. Decision-led design: Claude maps the decisions, the user leads architecture and scope via batched multiple-choice; ends in a committed decision log, then builds."
+metadata:
+  vitrinka-contract: "2026-08-30"
 ---
 
 # Decision-Led Brainstorming

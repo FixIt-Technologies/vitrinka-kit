@@ -1,6 +1,8 @@
 ---
 name: usertest
 description: "Autonomous exploratory user-testing of the current repo's app on a live vitrinka board — multi-role checks (admin creates → user sees), edge cases, written scenarios, runner-backed tests, small fixes. Use for 'user test this', 'explore the new feature', 'QA this like a user'."
+metadata:
+  vitrinka-contract: "2026-08-30"
 ---
 
 # usertest — explore the app like a user, leave evidence behind

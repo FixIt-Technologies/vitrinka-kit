@@ -1,6 +1,8 @@
 ---
 name: annotations
 description: "Fallback drain: pull this board's (or repo+branch's) annotation work directly over MCP when the normal dispatch didn't arrive. One-shot — drain, work the items, done; arms no listener. Invoke as /vitrinka:annotations [board-slug] FROM THE APP'S REPO; continuous servicing is /vitrinka:listen."
+metadata:
+  vitrinka-contract: "2026-08-30"
 ---
 
 # /vitrinka:annotations — manual MCP drain (dispatch fallback)

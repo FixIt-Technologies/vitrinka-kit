@@ -1,6 +1,8 @@
 ---
 name: sessions
 description: "The recorded user-testing pipeline — discover pending sessions, fix their issues, generate journey e2e tests, verify with a run traced onto the session board. Use for processing a recorded session or its backlog; single-stage (fix/test) runs route in the body."
+metadata:
+  vitrinka-contract: "2026-08-30"
 ---
 
 # /vitrinka:sessions — the pipeline autopilot

@@ -1,6 +1,8 @@
 ---
 name: artifact
 description: Author content on vitrinka — a standalone interactive document (report, analysis, dashboard), a Confluence-grade page card, an architecture diagram, or a whole living-docs board. Use for "artifact", "vitrinka this", "publish this analysis/report", "make this a page/diagram", "document this repo". Capturing UI work is publish.
+metadata:
+  vitrinka-contract: "2026-08-30"
 ---
 
 # artifact — one skill, four authored surfaces

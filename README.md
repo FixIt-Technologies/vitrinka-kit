@@ -18,6 +18,7 @@ your device and what data it collects.
 | [`apps/extension`](apps/extension) | The **Vitrinka Journey Recorder** Chrome extension — records manual-testing journeys from your browser. |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | What the recorders capture and where it is sent. |
 | [`skills/`](skills) | Agent skills for working with vitrinka — generated from the product repo, installable as the `vitrinka` plugin (Claude Code / Codex) or via the skills CLI. |
+| [`agents/`](agents) | Companion agents used by the skills, generated from the same product-repo source. |
 
 ## Quick start — agent skills
 

@@ -9,7 +9,7 @@
       "name": "vitrinka",
       "displayName": "Vitrinka",
       "source": "./",
-      "description": "Screenshot journeys, annotation boards, and the AI expression layer — 11 skills on two hubs (publish = captured work [session·journey·walkthrough·board], artifact = authored [standalone·pages·diagram·docs board], plus brainstorming, sessions, usertest, listen, resolve, review, release, answers, annotations); the vitrinka MCP server is registered separately by `vitrinka install` (secret-free stdio forwarder).",
+      "description": "Screenshot journeys, annotation boards, and the AI expression layer — 12 skills on two hubs (publish = captured work [session·journey·walkthrough·board], artifact = authored [standalone·pages·diagram·docs board], plus brainstorming, sessions, pair, usertest, listen, resolve, review, release, answers, annotations); the vitrinka MCP server is registered separately by `vitrinka install` (secret-free stdio forwarder).",
       "category": "productivity",
       "keywords": [
         "screenshots",
