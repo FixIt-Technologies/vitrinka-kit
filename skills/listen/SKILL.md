@@ -132,6 +132,11 @@ per the brainstorming skill instead of treating it as a code-fix item. Note
 choices are delivered exactly once — the `choices[]` payload you drain is the
 only copy, so act on it in this turn (or re-read answers via the MCP
 `get_questions {board}` — the durable question record — if lost).
+A `№<id> [session] <project>: testing session started — …` line means the user
+just began a RECORDER SESSION on your project (the `sessions[]` lane): the №
+is a session id (`get_session`, not `get_annotation`), and the move is the
+pair skill — switch to `/vitrinka:pair`'s preflight and loop; there is no
+annotation to service yet.
 A `№<id> [ask] <board>: <question> → <prompt>` line is an ASK-AI INFO REQUEST
 (questions-ux wave2): the operator wants more information about that question,
 now, mid-selection — it arrives in `wait_for_work`'s `asks[]` array. Service

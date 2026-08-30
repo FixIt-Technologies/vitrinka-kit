@@ -20,6 +20,7 @@
       "title": "Optional",
       "description": "Workflow extensions — exploratory user-testing, release boards, AI review.",
       "skills": [
+        "pair",
         "usertest",
         "release",
         "review"
