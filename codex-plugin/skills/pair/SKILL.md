@@ -93,7 +93,7 @@ tool calls), and it broadcasts your raw prose to whoever watches the panel,
 which is why it is off unless explicitly started.
 
 Bugs too big for the loop (a schema change, a refactor): say so in the thread
-(`reply`), estimate honestly, `set_status open` to hand it back, and keep
+(`reply`), estimate honestly, `set_status {id, status:"open"}` to hand it back, and keep
 pace with the queue — pair optimizes for the tester's flow, not for finishing
 every item live.
 

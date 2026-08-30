@@ -71,4 +71,5 @@ surface: <board | artifact>
 slug: <board or artifact slug>
 summary: <one line per meaningful action — import, sections, cards, arrange>
 warnings: <dropped branches, missing shots, fallbacks taken — or none>
+writebacks: <none | JSON array of {cardId, ref, md, action}; ref is the repo-relative source path, md is the complete replacement, action states commit then refresh from pushed content>
 ```
