@@ -39,12 +39,18 @@ Routing when the ask is ambiguous:
   `/w/<workspace>` — never hand-compose `{base}/boards/<slug>`; a standalone
   artifact hands back the URL `vitrinka push` prints. The link goes in your
   final summary, always.
-- **Delegation**: compose-heavy authoring (standalone doc.json, docs-board
+- **Delegation**: compose-heavy authoring (standalone doc.json/components, docs-board
   narrative) can run in the `vitrinka-publisher` agent, dispatched in the
   background — brief it with this skill's base directory and the surface's
   reference path; it returns the live URL. Capture never delegates (there is
   none here); on runtimes without the agent (Codex), work inline from the
   same references.
+- **Apply publisher write-backs**: when the publisher returns `writebacks`,
+  validate every `ref` as a safe repo-relative path in the active worktree,
+  replace it with the complete supplied `md`, commit and push it with the
+  current work, then refresh the matching repo-backed card from pushed
+  content. If any item cannot be applied safely, report it and do not claim
+  the artifact is complete. `writebacks: none` needs no repo action.
 - Boards are live: after creating a board (docs board included), arm the
   listener yourself per the listen skill — a subagent can never arm the
   parent's monitor. A standalone artifact is a page, not a board — nothing to
