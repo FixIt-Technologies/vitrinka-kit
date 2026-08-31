@@ -1,6 +1,8 @@
 ---
 name: pair
 description: "Live pairing during user testing — supervise the app under test (`vitrinka pair`), listen for the recorder's ⌖ snaps, fix each bug while the tester keeps testing, and restart so fixes appear immediately. Invoke as /vitrinka:pair FROM THE APP'S REPO."
+metadata:
+  vitrinka-contract: "2026-08-30"
 ---
 
 # /vitrinka:pair — fix the app while the user tests it
@@ -91,7 +93,7 @@ tool calls), and it broadcasts your raw prose to whoever watches the panel,
 which is why it is off unless explicitly started.
 
 Bugs too big for the loop (a schema change, a refactor): say so in the thread
-(`reply`), estimate honestly, `set_status open` to hand it back, and keep
+(`reply`), estimate honestly, `set_status {id, status:"open"}` to hand it back, and keep
 pace with the queue — pair optimizes for the tester's flow, not for finishing
 every item live.
 

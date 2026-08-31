@@ -1,6 +1,8 @@
 ---
 name: listen
 description: "Tune this session into a vitrinka annotation board and work its queue continuously — a native background monitor (`vitrinka watch`) re-invokes the session per annotation, zero-token idle. Invoke as /vitrinka:listen [board-slug] FROM THE APP'S REPO."
+metadata:
+  vitrinka-contract: "2026-08-30"
 ---
 
 # /vitrinka:listen — the listening session (native Monitor)

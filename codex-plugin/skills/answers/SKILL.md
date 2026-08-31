@@ -1,6 +1,8 @@
 ---
 name: answers
 description: "Fallback read: fetch a board's question answers over MCP when the \"Send to Claude\" dispatch didn't arrive or was lost — `get_questions` is the durable record. One-shot. Invoke as /vitrinka:answers [board-slug]; annotation work items are /vitrinka:annotations."
+metadata:
+  vitrinka-contract: "2026-08-30"
 ---
 
 # /vitrinka:answers — re-read board answers (dispatch fallback)

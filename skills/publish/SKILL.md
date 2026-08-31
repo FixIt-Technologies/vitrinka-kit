@@ -1,6 +1,8 @@
 ---
 name: publish
 description: Capture and publish UI work on vitrinka — sticky screenshot sessions, branching journey maps, client-facing walkthroughs, board and testing-suite organization. Use for "publish", "screenshot", "journey", or any capture/visualize-UI ask. Authored documents, pages, diagrams, and docs boards are the artifact skill.
+metadata:
+  vitrinka-contract: "2026-08-30"
 ---
 
 # publish — one skill, four intents
@@ -41,8 +43,14 @@ carries the result.
   (labels, declared branches, narrative), board slug/project/subgroup + meta,
   the summary verdict you want, and — on update passes — what changed.
 - **When the notification lands**: relay the server-returned URL to the user
-  and arm the listener YOURSELF (the listen skill) — a subagent can never arm
-  the parent's monitor. Never fabricate or predict the URL while waiting.
+  and inspect `writebacks`. For each write-back, validate that `ref` is a safe
+  repo-relative path in the active worktree, replace it with the supplied
+  complete `md`, commit and push it with the current work, then refresh that
+  repo-backed card from the pushed content. If a write-back is unsafe or
+  cannot be applied, report it and do not claim the publish is complete. Once
+  write-backs are settled, arm the listener YOURSELF (the listen skill) — a
+  subagent can never arm the parent's monitor. Never fabricate or predict the
+  URL while waiting.
 - **Fallback ladder** (say which rung you're on): `vitrinka-publisher` agent →
   (agent type unavailable — e.g. Codex, which ships skills only) inline, same
   contracts, straight from this file.
