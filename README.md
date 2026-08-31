@@ -5,10 +5,14 @@ machines and in your browsers — recorders, client packages, and the browser
 extension. The source is published here so you can see exactly what runs on
 your device and what data it collects.
 
-> vitrinka is an artifacts library and annotation-board platform: recorders
-> capture manual-testing journeys (screenshots, interactions, network calls,
-> notes) and publish them to your vitrinka server, where they become reviewable,
-> annotatable boards.
+> vitrinka connects a software team and its AI on one shared canvas. Testers
+> record their journeys instead of writing bug reports — the recording carries
+> the reproduction (screenshots, interactions, network calls, notes), so
+> nobody re-describes or re-reproduces what already happened once. Developers
+> review work by circling what's wrong on the screen, and a listening agent
+> picks the annotations up with the full context already attached. The tools
+> in this repository are the capture side of that loop: they publish to your
+> vitrinka server, where the data becomes reviewable, annotatable boards.
 
 ## What's in this repository
 
@@ -27,7 +31,7 @@ The skills ship through the standard channels — pick yours:
 ```bash
 # Claude Code
 claude plugin marketplace add FixIt-Technologies/vitrinka-kit
-claude plugin install vitrinka@vitrinka
+claude plugin install vitrinka@kit
 
 # Codex
 codex plugin marketplace add FixIt-Technologies/vitrinka-kit
