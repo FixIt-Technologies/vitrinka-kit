@@ -35,6 +35,12 @@ Routing when the ask is ambiguous:
   override `VITRINKA_URL`). Write auth: `VITRINKA_TOKEN` env or `vitrinka
   token` — never echo it; on the public host feed Bearer headers via stdin
   (`printf 'Authorization: Bearer %s' "$TOKEN" | curl -H @- …`), never argv.
+- **The deploy documents itself.** Component props, doc.json block shapes,
+  chart forms and the runtime shelf are served by the deployment's own docs
+  layer — `artifact_docs(topic)` over MCP or `vitrinka docs <topic>` (no
+  topic → the index) — extracted from the kit it actually runs, so it never
+  drifts. Look up, don't recall; the references here carry workflow and laws,
+  never prop tables.
 - **Hand back only server-returned URLs**: a board's `url` field carries
   `/w/<workspace>` — never hand-compose `{base}/boards/<slug>`; a standalone
   artifact hands back the URL `vitrinka push` prints. The link goes in your
