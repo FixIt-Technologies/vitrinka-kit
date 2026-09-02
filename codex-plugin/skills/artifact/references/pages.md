@@ -9,9 +9,10 @@ server-maintained markdown mirror; you only ever touch the markdown.
 ## Compose / update
 
 `payload.md` is the durable, agent-native truth (≤256 KiB) and the ONLY field
-you send. **Never send `payload.pm` or `payload.pmStale`** — those are the
-client editor's concern; the server maintains them and does NO
-markdown↔ProseMirror conversion.
+you send (envelope: `docs {topic:"element:page"}`). **Never send `payload.pm`
+or `payload.pmStale`** — those are the client editor's concern; the server
+maintains them and does NO markdown↔ProseMirror conversion. This file's
+round-trip vocabulary below is editor behavior, not schema — it lives here.
 
 ```json
 compose: {"cards":[{"kind":"page","payload":{"md":"# Architecture\n\nThe **eve** service orchestrates subagents.\n\n> [!INFO]\n> Postgres is the durable store.\n\n## Services\n\n| name | replicas |\n| --- | --- |\n| eve | 2 |\n"}}]}

@@ -141,9 +141,9 @@ serpentine layout with `--action`-labeled arrows, files under the project's
 Structure pass at wrap-up — **delegate it to `vitrinka-publisher`** (see
 Delegation above). The rules the agent follows: ONE `compose_board` call
 (batch-or-bust), fetch `get_templates` first, never invent card shapes. The
-per-kind payload contracts (viz/charts, step, wireframe, doc, link,
-board-portal, …) live in `references/card-kinds.md` — the tool schema carries
-only the kind index:
+per-kind payload contracts live in the `docs` MCP tool (canonical element
+vocabulary — chart, table, mockup, doc, …); `references/card-kinds.md` keeps
+the kind index + doctrine — the tool schema carries only the kind index:
 
 - **Walkthrough / QA board — steps ARE the walkthrough**: ONE `section` per
   journey/area, a numbered `step` per screen with `status` and

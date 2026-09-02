@@ -11,6 +11,15 @@ Everything *authored* lands here; everything *captured* (screenshots,
 journeys, sessions) is the **publish** skill. Pick the surface, read its
 reference, share the core below.
 
+**The element model (2026-09-01):** board and artifact are one thing. Every
+authored unit is an **element** (`{kind, payload}` — chart, table, prose,
+diagram, mockup, doc, …), the SAME shape as a board card's content; a
+standalone artifact is the solo view of one element (`/a/<card>`), and a
+semantic push mints/updates a `doc` card on the project's artifacts board —
+the push response carries both URLs. The vocabulary is **canonical-only**:
+the strict element door rejects legacy shapes; look every shape up, never
+recall it.
+
 | Surface | Deliverable | Reference |
 |---|---|---|
 | **standalone** | self-contained interactive page — report, analysis, review, dashboard, showcase | `references/standalone.md` |
@@ -35,12 +44,14 @@ Routing when the ask is ambiguous:
   override `VITRINKA_URL`). Write auth: `VITRINKA_TOKEN` env or `vitrinka
   token` — never echo it; on the public host feed Bearer headers via stdin
   (`printf 'Authorization: Bearer %s' "$TOKEN" | curl -H @- …`), never argv.
-- **The deploy documents itself.** Component props, doc.json block shapes,
-  chart forms and the runtime shelf are served by the deployment's own docs
-  layer — `artifact_docs(topic)` over MCP or `vitrinka docs <topic>` (no
-  topic → the index) — extracted from the kit it actually runs, so it never
-  drifts. Look up, don't recall; the references here carry workflow and laws,
-  never prop tables.
+- **The deploy documents itself.** Element payload contracts, component
+  props, doc.json block shapes, chart forms and the runtime shelf are served
+  by the deployment's own layered docs tree — the `docs` MCP tool
+  (`artifact_docs` is its alias) or `vitrinka docs <topic>` (no topic → the
+  index; three families: element / board / artifact, `family:topic`
+  disambiguates collisions) — generated from the validator and kit the
+  deploy actually runs, so it never drifts. Look up, don't recall; the
+  references here carry workflow and laws, never prop tables.
 - **Hand back only server-returned URLs**: a board's `url` field carries
   `/w/<workspace>` — never hand-compose `{base}/boards/<slug>`; a standalone
   artifact hands back the URL `vitrinka push` prints. The link goes in your
