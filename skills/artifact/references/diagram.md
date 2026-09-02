@@ -108,54 +108,48 @@ but a slip won't cost you a retry loop. Ambiguity still 400s with the exact fix.
 internet), `mesh` (WG/private link), `internal` (in-cluster), `outbound`
 (third-party), `accent` (highlight a domain group).
 
-### Example 1 — service architecture (lanes + groups + service/endpoint/entity)
+### Worked examples
 
-```json
-compose: {"cards":[{"kind":"diagram","payload":{
-  "kicker":"SYSTEM ARCHITECTURE","title":"ShopFlow","dir":"TD",
-  "lanes":[
-    {"label":"API GATEWAY","nodes":[
-      {"id":"gw","type":"service","title":"gateway","image":"gw:1.4","replicas":3,
-       "mappings":[{"host":"443","cont":"8080","proto":"https"}]}],
-     "groups":[{"id":"ord","title":"orders","tone":"accent","nodes":[
-       {"id":"ep","type":"endpoint","title":"create order","method":"POST","path":"/orders","codes":[201,422]}]}]},
-    {"label":"DATABASE","groups":[{"id":"db","title":"orders domain","tone":"accent","nodes":[
-      {"id":"orders","type":"entity","title":"orders","columns":[
-        {"name":"id","type":"uuid","pk":true},
-        {"name":"user_id","type":"uuid","fk":"users.id"}]}]}]}],
-  "edges":[
-    {"from":"gw","to":"ep","style":"public"},
-    {"from":"ep","to":"orders","style":"internal","card":"1..n"}],
-  "legend":[{"style":"public","label":"internet"},{"style":"internal","label":"in-cluster"}]}}]}
-```
+Full JSON examples (service architecture with lanes/groups, an ER pair where
+`fk:"users.id"` alone draws the crow's-foot, mermaid passthrough — a payload
+carrying `"mermaid":"<source>"` and no `lanes` converts server-side, loud
+error naming any unsupported line) live in the docs tree: `docs
+{topic:"element:diagram"}` / `vitrinka docs diagram`. Look them up there —
+generated against the validator, never stale.
 
-### Example 2 — an ER pair (two entities, crow's-foot from the FK)
+## Verify, then iterate — the quality loop
 
-```json
-compose: {"cards":[{"kind":"diagram","payload":{
-  "title":"Users ↔ Orders","dir":"LR",
-  "nodes":[
-    {"id":"users","type":"entity","title":"users","columns":[
-      {"name":"id","type":"uuid","pk":true},{"name":"email","type":"text","unique":true}]},
-    {"id":"orders","type":"entity","title":"orders","columns":[
-      {"name":"id","type":"uuid","pk":true},
-      {"name":"user_id","type":"uuid","fk":"users.id"},
-      {"name":"total","type":"int"}]}]}}]}
-```
-The `fk:"users.id"` alone draws the column-to-column crow's-foot edge — no
-explicit `edges` needed.
+Every diagram write comes back **scored**. Beside `payload.repairs` the
+response carries:
 
-### Example 3 — mermaid passthrough
+- `metrics` — the composition scores (crossings, corridors, labelHits,
+  labelOverflows, borderRuns, bends, minSegment, aspect, titlePx). The engine
+  widens LR rank gaps so every wire label the board paints fits between nodes
+  (labels ellipsize at the 240px pill cap, ~31 chars); `label-overflow`
+  findings mean pinned geometry — take the verified drop-pin / shorten-label
+  fix.
+- `diagnostics` — causal findings, docspec envelope + `{code, evidence,
+  fixes[], suppresses[]}`. Every entry in `fixes` is **verified**: the server
+  re-ran the layout with that edit and quotes the measured delta
+  (`set dir:"LR" — verified: aspect 3.40 → 1.80`). A `suppresses` list marks
+  the finding as a root cause — fixing it clears those codes too.
+- `render` — the card's SVG export URL. Fetch it and **look** at the diagram.
 
-A payload carrying `"mermaid":"<source>"` and no `lanes` is converted
-server-side (flowcharts + basic sequenceDiagram; node shapes, `-->`/`-.->`/`==>`
-edges, `subgraph`→group). Unsupported syntax is a loud compose error naming the
-line.
+The loop (the same "Verify, then iterate" discipline as `standalone.md`):
+after every write, read the diagnostics AND fetch the render; apply at most
+**one** diagnosed fix per round (root causes first — the `suppresses`
+holder); re-check; stop after **≤2 correction rounds** or when the finding
+count stops improving; report leftovers truthfully — never call a diagram
+clean over open error findings.
 
-```json
-compose: {"cards":[{"kind":"diagram","payload":{
-  "mermaid":"flowchart TD\n  A[Client] -->|GET| B(API)\n  B ==> C[(DB)]"}}]}
-```
+`quality:"showcase"` in the payload opts **this write** into the strict tier:
+error-severity composition findings become a rejecting 400 carrying the same
+diagnostics. Use it for docs-board and deliverable diagrams. It is consumed
+per write — never stored — so re-send it on each write you want gated.
+
+`metrics`/`diagnostics` persist in the stored payload (board reads and
+scrapes see them): findings on a card you didn't just write are its last
+write's score, not something to "clean up" by hand.
 
 ## Updating a diagram
 

@@ -46,6 +46,8 @@ decision.
    `openapi`→API. (Raw form — `POST /api/v1/boards/{slug}/import {kind, source,
    ref, rev, title, section}`, public host `Authorization: Bearer` via stdin,
    never inline the token; explicit `x`/`y` win over `section` so omit them.)
+   Imports come back scored like any diagram write — run `diagram.md`'s
+   quality loop (read `diagnostics`, eyeball `render`) on each one.
 4. **Author pages** (via the page surface patterns): an **overview** page in the
    Pages section (what the system is, the domains, links into each diagram) plus
    **per-service / per-domain** pages as depth warrants. Repo-backed pages carry
