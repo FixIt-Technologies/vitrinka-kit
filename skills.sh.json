@@ -9,7 +9,6 @@
         "artifact",
         "publish",
         "brainstorming",
-        "sessions",
         "listen",
         "resolve",
         "answers",
@@ -17,13 +16,20 @@
       ]
     },
     {
-      "title": "Optional",
-      "description": "Workflow extensions — exploratory user-testing, release boards, AI review.",
+      "title": "PM",
+      "description": "The task engine — intake, triage, ranking, automation rules, release boards.",
       "skills": [
+        "tasks",
+        "release"
+      ]
+    },
+    {
+      "title": "QA",
+      "description": "The testing pipeline — recorded sessions, live pairing, exploratory user-testing, AI review.",
+      "skills": [
+        "sessions",
         "pair",
         "usertest",
-        "release",
-        "tasks",
         "review"
       ]
     }
