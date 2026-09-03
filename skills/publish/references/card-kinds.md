@@ -6,13 +6,17 @@ contract with an example) or `vitrinka docs <kind>`. The tree is generated
 from the validator, so it never drifts — trust it over anything remembered.
 This file keeps only the kind index, routing advice, and cross-cutting
 doctrine. The vocabulary is **canonical-only** (migrate-and-drop, 2026-09-01):
-legacy `viz`/`wireframe` payload shapes are rejected by the strict element
-door — compose `chart`/`mockup` per their docs topics.
+the retired `viz`/`wireframe` kind NAMES and their legacy payload shapes are
+both rejected at every door with a 400 naming the canonical kind — compose
+`chart`/`table`/`mockup` per their docs topics. The exact list a deploy
+accepts is the `kind` enum of the `compose_board` MCP schema (generated from
+the server registry) — the same list `docs` indexes.
 
 ## Element kinds (one vocabulary — board card, doc block, or solo artifact)
 
 `chart` · `table` · `prose` · `page` · `diagram` · `mockup` · `compare` ·
-`meter` · `stat` · `code` · `figure` · `media` · `html` · `doc` — each is a
+`meter` · `stat` · `code` · `figure` · `media` · `html` · `doc` · `verdict` ·
+`finding` · `list` · `timeline` · `chips` — each is a
 `docs` topic carrying the exact payload contract. The same shape works as a
 board card, nested inside a fractal `doc`, and full-screen at its solo `/a/…`
 URL. Highlights the index alone won't tell you:
@@ -41,6 +45,7 @@ URL. Highlights the index alone won't tell you:
 - **`text`** `{md, role}` · **`note`** `{text}` · **`shape`** · **`callout`**
   `{tone, md}` · **`checklist`** (interactive, state persists) — see their
   docs topics; text md is full GFM + `$…$` math + `[!icon <name>]`.
+  pin: e2e/autolayout-elements.spec.ts#step/callout/checklist/compare render; checklist tick persists server-side
 - **`cluster`** / **`section`** — the frames. Doctrine: untitled cluster = the
   invisible row/col group (use liberally; never let cards stack into a
   column); section = a named journey frame, always visible, auto-indexed;
@@ -58,7 +63,9 @@ URL. Highlights the index alone won't tell you:
   **`api`** (whole OpenAPI 3.x/Swagger 2 doc in `spec`, ≤512 KB re-marshaled;
   complements the openapi→diagram importer — one spec, two faces).
 - **`chat`** — a transcript is EVIDENCE: messages always sent inline (server
-  stages to a blob + `dataRef`; ≤1 MiB serialized, split longer runs),
+  stages to a blob + `dataRef`;
+  pin: internal/web/chat_api_test.go#TestChatCard_InlineMessagesBecomeBlob
+  ≤1 MiB serialized, split longer runs),
   byte-exact whitespace, immutable (replace whole payload to change).
   `references:[cardId]` draws bubble-anchored wires to existing shots — place
   shots first. **The redaction gate is law**: `vitrinka import chat --eve <id>`

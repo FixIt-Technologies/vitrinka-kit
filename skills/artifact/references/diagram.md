@@ -158,6 +158,7 @@ write's score, not something to "clean up" by hand.
   updates so pins/labels/notes survive.
 - **Imported cards refresh** via `/refresh`, not `update_cards` — the source is
   the truth.
+  pin: internal/web/import_api_test.go#TestRefreshKeepsOverridesAndReparses
 - **Never author `payload.geo` or coordinates.** `render = serverLayout(payload)
   ⊕ overrides`. If you want a box somewhere specific, that's a human override,
   not your job.

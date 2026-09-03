@@ -88,6 +88,7 @@ compose: {"cards":[{"kind":"page","payload":{"md":"# Architecture\n\nThe **eve**
     back as bulleted paragraphs — semantic, not byte, stability). Content is
     NEVER dropped: a cell that can't fully round-trip (nested table, code)
     degrades to readable text rather than vanishing.
+    pin: e2e/page-blocks.spec.ts#every block round-trips md → editor → md (expand/layout/col/status/date/toc)
 - **Images** — a bare `![alt](url)` stays bare; extras attach in a `{…}` suffix:
   `![alt](url){width=320 align=wrap-right caption="A gate"}`. `align` is
   center (default) / wrap-left / wrap-right / wide; `width` is a pixel number;
@@ -96,8 +97,7 @@ compose: {"cards":[{"kind":"page","payload":{"md":"# Architecture\n\nThe **eve**
 - **Files** (non-image) — a plain markdown link `[name](url)`; the editor shows
   it as a quiet file chip, but the md is just the link.
 - **Code** — fenced blocks with a language tag round-trip as-is:
-  ` ```python … ``` `. The read face highlights (~20 common languages); the
-  language, a copy button, and a soft-wrap toggle live on the block in the editor.
+  ` ```python … ``` `.
 - **Mentions** — `@[handle]` renders a quiet mention token and (on save) files a
   wire notification for that member. An unknown handle still renders. Members
   come from `GET /api/v1/boards/{slug}/members`.
@@ -126,6 +126,7 @@ diagrams use — so `docs/architecture.md` and its board card stay in sync.
   replaces `payload.md` and bumps `source.rev`. (Public host: `Authorization:
   Bearer` header via stdin — never inline the token: `printf 'Authorization:
   Bearer %s' "$TOKEN" | curl -H @- …`.)
+  pin: internal/web/docs_boards_test.go#TestPageRefresh_ReplacesMarkdown
 - **Write-back** (board → repo) is THIS skill's job — the server only stores and
   refreshes; it has no repo access. When a human edited the board page and you
   need the repo file to match:
@@ -141,13 +142,12 @@ diagrams use — so `docs/architecture.md` and its board card stay in sync.
 - **Page → node**: markdown links `#E<elemNo>` fly to a card by its board
   E-number; `#E<elemNo>/<nodeId>` flies and highlights a specific diagram node.
   Write them as normal markdown links: `[orders service](#E7/orders)`. The read
-  face intercepts them. Targets resolve **tolerantly** — a missing
-  elemNo/nodeId renders as inert text, never an error.
+  face intercepts them.
+  pin: e2e/page-card.spec.ts#a page #E<n>/<nodeId> link flies to the diagram and pulses the node
 - **Page → heading** (same scheme): `#E<elemNo>/<heading-slug>` flies to a page
   card and scrolls to a heading. The slug is the heading text lowercased with
   non-alphanumerics collapsed to `-` (e.g. `## Deep Section` → `deep-section`):
-  `[jump](#E12/deep-section)`. Hovering a heading in the editor shows a quiet ¶
-  that copies this link. Unknown slug = fly to the card only, never an error.
+  `[jump](#E12/deep-section)`.
 - **Node → page** (the reverse) is the diagram side: a node's `doc:<elemNo>`
   (+ optional `docAnchor`) renders a quiet ¶ affordance that flies to the page.
   Set that when composing the diagram (`diagram.md`, this directory) so a box points
