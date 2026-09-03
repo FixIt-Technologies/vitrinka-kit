@@ -5,6 +5,7 @@ artifact (full `html` document or a scaffolded report) uses real libraries
 WITHOUT bundling, CDNs, or token-expensive hand-rolled code. Everything is
 CORS-enabled and CSP-compatible (artifact iframes are opaque-origin — /vendor/*
 responds with Access-Control-Allow-Origin: *; no cookies or same-origin capabilities). **Verify against the deployed server, not cached
+pin: internal/web/vendor_test.go#TestVendorRoute
 docs: `GET /api/v1/runtime`** returns `{cli, libs: {name: version}, cardKinds}`
 for exactly this deploy (runtime-shelf decisions 2026-07-23 §8).
 
@@ -42,6 +43,9 @@ for exactly this deploy (runtime-shelf decisions 2026-07-23 §8).
   runs. Anything needing the libraries above ships as a full `html` document
   with the scaffold import map (`vitrinka artifact-init` writes it).
 
-Immutability contract: `/vendor` files are pinned + immutable-cached; first-party
-modules version by filename (`apiref-1`, `tanstack-table`) — behavior changes ship as new
-files, published artifacts keep importing what they were born with.
+Immutability contract: `/vendor` files are pinned + immutable-cached except the mutable engines on the
+server's no-cache list (`board-1`, `kit-3`, the editors — they improve every
+published artifact retroactively per deploy); other first-party modules version
+by filename (`apiref-1`, `tanstack-table`) — behavior changes ship as new files,
+published artifacts keep importing what they were born with.
+pin: internal/web/vendor_test.go#TestVendorRoute

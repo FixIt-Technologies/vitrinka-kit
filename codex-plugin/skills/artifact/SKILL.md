@@ -16,9 +16,12 @@ authored unit is an **element** (`{kind, payload}` — chart, table, prose,
 diagram, mockup, doc, …), the SAME shape as a board card's content; a
 standalone artifact is the solo view of one element (`/a/<card>`), and a
 semantic push mints/updates a `doc` card on the project's artifacts board —
-the push response carries both URLs. The vocabulary is **canonical-only**:
-the strict element door rejects legacy shapes; look every shape up, never
-recall it.
+the push response carries both URLs (field names:
+`../publish/references/wire-fields.md`). The vocabulary is **canonical-only**:
+the strict element door rejects legacy shapes and retired kind names; look
+every shape up, never recall it.
+pin: e2e/render-audit.spec.ts#the solo view mounts the board's own faces for every card kind
+pin: e2e/render-audit.spec.ts#a fully canonical document mints its doc card and the solo view paints every block, nested diagram included
 
 | Surface | Deliverable | Reference |
 |---|---|---|

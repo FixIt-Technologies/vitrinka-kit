@@ -152,6 +152,7 @@ the kind index + doctrine — the tool schema carries only the kind index:
   (doubles every screen) — skip `board-from-set` or delete the raw flow.
 - **Live annotate→fix loop on a single screen**: keep that screen a real shot
   card — pixel-space crops and face versioning only exist on shot/media cards.
+  pin: e2e/board-v5.spec.ts#lightbox from the deck: full image, version filmstrip after swap, ⌖ target
 - **Every board ends with a summary card**: one `callout` (tone `success` when
   green) — verdict, counts, links, what was NOT covered. Later passes UPDATE
   it (`update_cards`), never stack a second.
