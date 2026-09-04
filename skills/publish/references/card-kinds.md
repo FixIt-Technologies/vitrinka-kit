@@ -16,7 +16,7 @@ the server registry) — the same list `docs` indexes.
 
 `chart` · `table` · `prose` · `page` · `diagram` · `mockup` · `compare` ·
 `meter` · `stat` · `code` · `figure` · `media` · `html` · `doc` · `verdict` ·
-`finding` · `list` · `timeline` · `chips` — each is a
+`finding` · `list` · `timeline` · `chips` · `columns` · `ref` — each is a
 `docs` topic carrying the exact payload contract. The same shape works as a
 board card, nested inside a fractal `doc`, and full-screen at its solo `/a/…`
 URL. Highlights the index alone won't tell you:

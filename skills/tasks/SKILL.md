@@ -83,7 +83,9 @@ then ALWAYS `dry_run_rule` and show what would have fired over the last
 events before enabling it (`PATCH /rules/{id} {enabled: true}`). Four
 built-ins ship enabled and need no AI backend: `stale-nudge`,
 `auto-archive-completed`, `due-tomorrow-reminder`, `merged-pr-completes`.
-Rule actions run as `rule:<name>` and never re-trigger rules.
+Rule actions run as `rule:<name>` and never re-trigger rules. Creating or
+enabling a rule is admin-only (a member token gets 403); dry-run is open to
+members inside the rule's own project.
 
 ## Mirror
 
@@ -91,7 +93,8 @@ A project may mirror into Jira (`GET|PUT /projects/{p}/mirror {connector,
 truth: local|remote, config.stateMap}`, `POST …/mirror/sync`). The truth
 side wins every conflict; the ledger records what was overwritten as a
 `mirrored` event. Do not "fix" a conflict by editing the losing side — say
-which side is truth and let the next sync settle it.
+which side is truth and let the next sync settle it. Binding the mirror and
+running a sync are admin-only.
 
 ## CLI
 
