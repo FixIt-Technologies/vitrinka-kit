@@ -21,13 +21,31 @@ there is nothing an agent can do that a human cannot see and undo.
   cancelled`. A project's **states** (`list_states`) are keys inside those
   groups; every project starts with the six legacy statuses as states, so
   `status` still works and is derived from the state's group.
-- **Types**: `task · bug · story · epic`; a parent task rolls its children up.
+- **Types**: `task · bug · story · epic · todo`; a parent task rolls its
+  children up. A `todo` is a personal reminder with a moment (milestone,
+  trigger, clock) — the `me` module's `/vitrinka:todo`, `todo-list`,
+  `todo-done`, `todo-milestone` and `remind` skills own that shape
+  (`vitrinka todo|schedule`); file engineering work as `task`.
 - **Rank** is a string; `rank_task {before, after}` moves, `list_tasks` with
   the filter document `{order: "rank"}` reads it.
 - **Refs** attach a task to the evidence: `add_task_ref {kind, ref, meta}`.
   A `pr` ref is `owner/repo#n`; the GitHub App webhook attaches it for
   branches or PRs carrying `vt-<id>`, and `meta.merged = true` completes the
   task through a built-in rule.
+- **Custom fields** are per-project typed definitions (`list_fields`: key,
+  kind, options, `appliesTo`) whose VALUES ride the task as `fields:
+  {key: value}` on `get_task`, `create_task` and `update_task` (partial
+  merge — pass only the keys you change, `null` deletes). Kinds and value
+  shapes: `text · longtext · url` string · `select` one of the options ·
+  `multiselect` string[] · `checklist` `[{name, done, evidence?}]` ·
+  `number` · `date` "YYYY-MM-DD" · `relation` a task id. A definition
+  applies only to its `appliesTo` type; every project carries the
+  **feature preset on epics** — `outcome`, `non_goals`, `gates` and
+  `decisions` (checklists: tick `done` WITH `evidence`), `ledger_state`
+  (`scheduled` by default · `active · waiting · superseded · closed`),
+  `waiting_on`, `next_action`. The filter document takes `fields:
+  {key: value}` for select/multiselect. Defining fields
+  (`create_field · update_field · delete_field`) is admin-only.
 - **Intake drafts** are tasks with `intake = pending`. They never appear in
   normal lists; `list_intake` shows them with a dedupe verdict
   (`new | likely-duplicate` + candidate tasks and trigram scores).
@@ -104,11 +122,25 @@ side wins every conflict; the ledger records what was overwritten as a
 which side is truth and let the next sync settle it. Binding the mirror and
 running a sync are admin-only.
 
+## Moving a project between workspaces
+
+`transfer_project {project, to, dryRun, archiveSource}` / `vitrinka project
+transfer <project> --to <workspace> [--dry-run] [--archive-source]` copies
+everything the project owns (sets, boards, sessions, reports, releases, the
+PM engine, blobs) into a workspace the caller also OWNS — `to` is the
+destination, never the caller's tenant. Dry-run first and show the report;
+the copy is idempotent (re-runs report `skipped`), a colliding board slug or
+set key is a 409 naming it, and nothing is deleted: `archiveSource` only
+stamps the source boards archived. Doctrine: `docs` topic `project-transfer`.
+
 ## CLI
 
 ```text
 vitrinka task list [--state a,b] [--group started] [--order rank] [--text …]
 vitrinka task get|create|update|comment|rank|search|delete|mine
+vitrinka task field get <id> [key] · task field set <id> <key> <value|json>
+vitrinka project fields list|add <key> <label> --kind …|update <key>|remove <key>
+vitrinka project transfer <project> --to <workspace> [--dry-run] [--archive-source]
 vitrinka sprint list|create|start|complete --carry next|backlog
 vitrinka intake list|accept|decline|merge --into <id>|propose
 ```
@@ -119,4 +151,5 @@ vitrinka intake list|accept|decline|merge --into <id>|propose
 - Never accept your own intake drafts unless the user asked you to triage.
 - Never enable a rule without a dry-run in the transcript.
 - Never bypass `status`/`state` validation by inventing keys; `list_states`
-  first.
+  first. Same for custom fields: `list_fields` before writing `fields`, and
+  never tick a gate `done` without its `evidence`.
