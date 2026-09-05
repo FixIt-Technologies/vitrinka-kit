@@ -51,8 +51,9 @@ Routing when the ask is ambiguous:
   props, doc.json block shapes, chart forms and the runtime shelf are served
   by the deployment's own layered docs tree — the `docs` MCP tool
   (`artifact_docs` is its alias) or `vitrinka docs <topic>` (no topic → the
-  index; three families: element / board / artifact, `family:topic`
-  disambiguates collisions) — generated from the validator and kit the
+  index — `docs {family:"element"}` narrows it to one layer; three
+  families: element / board / artifact, `family:topic` disambiguates
+  collisions) — generated from the validator and kit the
   deploy actually runs, so it never drifts. Look up, don't recall; the
   references here carry workflow and laws, never prop tables.
 - **Hand back only server-returned URLs**: a board's `url` field carries
