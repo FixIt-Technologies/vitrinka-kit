@@ -44,6 +44,14 @@ there is nothing an agent can do that a human cannot see and undo.
   `intake_verdict`. Say which drafts came back `likely-duplicate` and of what.
 - **Filing from a bug report** happens on approve without you: the report
   becomes an accepted `bug` task, then the tracker ticket mirrors it.
+- **Filing from a board card** is the human's door — the card's context
+  menu "File a task from this card" (`POST /api/v1/cards/{id}/task`): the
+  draft carries a board ref pinned to the card (`meta.cardId`, the panel's
+  Evidence row links back), and an accepting reviewer gets the task
+  projected onto the same board as a live task card. The agent-side twin is
+  `propose_tasks` + `add_task_ref {kind:"board", ref, meta:{cardId}}`; the
+  reverse hand (task → canvas) is the task panel's "Pin on <board>" or
+  `POST /api/v1/boards/{slug}/task-cards {taskId}`.
 
 ## Working a task
 
